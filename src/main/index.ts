@@ -1,6 +1,8 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
-import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { registerConnectionHandlers } from './ipc/connections'
+
+const isDev = process.env.NODE_ENV !== 'production'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -20,6 +22,7 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
+    if (isDev) mainWindow.webContents.openDevTools({ mode: 'detach' })
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -27,20 +30,18 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+  const devUrl = process.env['ELECTRON_RENDERER_URL']
+  if (isDev && devUrl) {
+    mainWindow.loadURL(devUrl)
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 }
 
 app.whenReady().then(() => {
-  electronApp.setAppUserModelId('com.dbstudio')
+  if (process.platform === 'win32') app.setAppUserModelId('com.dbstudio')
 
-  app.on('browser-window-created', (_, window) => {
-    optimizer.watchWindowShortcuts(window)
-  })
-
+  registerConnectionHandlers()
   createWindow()
 
   app.on('activate', () => {
