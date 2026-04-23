@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
   ConnectionConfig, TestConnectionResult, TableInfo, ColumnInfo, QueryResult,
-  ScriptFile, ScriptVersion, ScriptStats
+  ScriptFile, ScriptVersion, ScriptStats, ScriptSuggestions
 } from '../shared/types'
 
 contextBridge.exposeInMainWorld('api', {
@@ -49,6 +49,10 @@ contextBridge.exposeInMainWorld('api', {
     logError: (scriptId: string, contentHash: string, errorMessage: string, connectionId: string | null): Promise<void> =>
       ipcRenderer.invoke('scripts:logError', scriptId, contentHash, errorMessage, connectionId),
     stats: (scriptId: string): Promise<ScriptStats> =>
-      ipcRenderer.invoke('scripts:stats', scriptId)
+      ipcRenderer.invoke('scripts:stats', scriptId),
+    suggestions: (activeDb: string | null, activeTable: string | null, threshold?: number): Promise<ScriptSuggestions> =>
+      ipcRenderer.invoke('scripts:suggestions', activeDb, activeTable, threshold),
+    search: (query: string): Promise<ScriptFile[]> =>
+      ipcRenderer.invoke('scripts:search', query)
   }
 })

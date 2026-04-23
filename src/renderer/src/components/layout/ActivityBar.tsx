@@ -1,5 +1,6 @@
-import React from 'react'
-import { Server, FileCode, History } from 'lucide-react'
+import React, { useState } from 'react'
+import { Server, FileCode, History, Settings } from 'lucide-react'
+import SettingsModal from './SettingsModal'
 
 type Panel = 'connections' | 'scripts' | 'history'
 
@@ -15,22 +16,42 @@ const items: { id: Panel; icon: React.ReactNode; label: string }[] = [
 ]
 
 export default function ActivityBar({ activePanel, onPanelChange }: Props) {
+  const [showSettings, setShowSettings] = useState(false)
+
   return (
-    <div className="flex flex-col items-center w-12 bg-[#333333] border-r border-[#3c3c3c] shrink-0">
-      {items.map((item) => (
+    <>
+      <div className="flex flex-col items-center w-12 bg-vs-activityBar border-r border-vs-border shrink-0">
+        <div className="flex-1 flex flex-col">
+          {items.map((item) => (
+            <button
+              key={item.id}
+              title={item.label}
+              onClick={() => onPanelChange(item.id)}
+              className={`
+                flex items-center justify-center w-12 h-12 mt-1
+                text-vs-textDim hover:text-vs-text transition-colors
+                ${activePanel === item.id
+                  ? 'text-vs-text border-l-2 border-vs-statusBar'
+                  : 'border-l-2 border-transparent'
+                }
+              `}
+            >
+              {item.icon}
+            </button>
+          ))}
+        </div>
+
+        {/* Settings at bottom */}
         <button
-          key={item.id}
-          title={item.label}
-          onClick={() => onPanelChange(item.id)}
-          className={`
-            flex items-center justify-center w-12 h-12 mt-1
-            text-[#858585] hover:text-[#d4d4d4] transition-colors
-            ${activePanel === item.id ? 'text-[#d4d4d4] border-l-2 border-[#007acc]' : 'border-l-2 border-transparent'}
-          `}
+          title="Настройки"
+          onClick={() => setShowSettings(true)}
+          className="flex items-center justify-center w-12 h-12 mb-1 text-vs-textDim hover:text-vs-text transition-colors"
         >
-          {item.icon}
+          <Settings size={22} />
         </button>
-      ))}
-    </div>
+      </div>
+
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+    </>
   )
 }

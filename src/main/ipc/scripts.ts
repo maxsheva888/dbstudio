@@ -2,7 +2,8 @@ import { ipcMain } from 'electron'
 import {
   listScripts, createScript, renameScript, deleteScript,
   listVersions, getVersion, saveVersion,
-  logRun, logError, getStats
+  logRun, logError, getStats,
+  getSuggestions, searchScripts
 } from '../scripts/store'
 
 export function registerScriptsHandlers(): void {
@@ -55,5 +56,16 @@ export function registerScriptsHandlers(): void {
 
   ipcMain.handle('scripts:stats', (_e, scriptId: string) =>
     getStats(scriptId)
+  )
+
+  ipcMain.handle('scripts:suggestions', (
+    _e,
+    activeDb: string | null,
+    activeTable: string | null,
+    threshold?: number
+  ) => getSuggestions(activeDb, activeTable, threshold))
+
+  ipcMain.handle('scripts:search', (_e, query: string) =>
+    searchScripts(query)
   )
 }

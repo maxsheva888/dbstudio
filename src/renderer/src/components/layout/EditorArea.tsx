@@ -3,6 +3,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import Editor, { DiffEditor, type OnMount } from '@monaco-editor/react'
 import { X, Play } from 'lucide-react'
 import { useConnections } from '@renderer/context/ConnectionsContext'
+import { useSettings } from '@renderer/context/SettingsContext'
 import ResultsGrid from '@renderer/components/results/ResultsGrid'
 import VersionsPanel from '@renderer/components/scripts/VersionsPanel'
 import type { QueryResult, ScriptFile, ScriptVersion } from '@shared/types'
@@ -14,11 +15,9 @@ interface Tab {
   id: string
   title: string
   content: string
-  // Script mode
   scriptId?: string
   loadedVersionId?: number
   loadedContent?: string
-  // Diff mode
   isDiff?: boolean
   diffOriginal?: string
   diffModified?: string
@@ -30,22 +29,16 @@ interface TabResult {
   loading: boolean
 }
 
-// ── Constants ────────────────────────────────────────────────────────────────
-
 const DEFAULT_SQL = `-- Добро пожаловать в DBStudio
--- Ctrl+Enter — выполнить запрос
--- Ctrl+S — сохранить версию скрипта
+-- Ctrl+Enter — выполнить запрос  |  Ctrl+S — сохранить версию
+-- Ctrl+Shift+P — палитра команд
 
 SELECT 1 + 1 AS result;
 `
 
-// Simple FNV-like hash for dirty detection in renderer (no crypto needed)
 function simpleHash(s: string): number {
   let h = 2166136261
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) }
   return h >>> 0
 }
 
@@ -56,6 +49,9 @@ interface Props {
   onInitialSqlConsumed?: () => void
   scriptToOpen?: ScriptFile
   onScriptOpened?: () => void
+  onLastQueryMs?: (ms: number) => void
+  onOpenPalette?: () => void
+  newTabTrigger?: number
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -64,9 +60,13 @@ export default function EditorArea({
   initialSql,
   onInitialSqlConsumed,
   scriptToOpen,
-  onScriptOpened
+  onScriptOpened,
+  onLastQueryMs,
+  onOpenPalette,
+  newTabTrigger
 }: Props) {
   const { activeConnectionId, activeDatabases, activeDatabase, setActiveDatabase } = useConnections()
+  const { monacoTheme, editorFontSize } = useSettings()
   const [tabs, setTabs] = useState<Tab[]>([
     { id: '1', title: 'Query 1', content: DEFAULT_SQL }
   ])
@@ -77,30 +77,21 @@ export default function EditorArea({
 
   const activeTab = tabs.find((t) => t.id === activeTabId)
   const activeResult = tabResults[activeTabId]
-  const isDirty = activeTab?.scriptId != null &&
-    activeTab.content !== activeTab.loadedContent
+  const isDirty = activeTab?.scriptId != null && activeTab.content !== activeTab.loadedContent
 
-  // ── Open script from sidebar ───────────────────────────────────────────────
+  // ── Open script ───────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!scriptToOpen) return
     const existing = tabs.find((t) => t.scriptId === scriptToOpen.id)
-    if (existing) {
-      setActiveTabId(existing.id)
-      onScriptOpened?.()
-      return
-    }
+    if (existing) { setActiveTabId(existing.id); onScriptOpened?.(); return }
     window.api.scripts.versions(scriptToOpen.id).then((versions) => {
       const latest = versions[0]
       const content = latest?.content ?? ''
       const id = Date.now().toString()
       setTabs((prev) => [...prev, {
-        id,
-        title: scriptToOpen.name,
-        content,
-        scriptId: scriptToOpen.id,
-        loadedVersionId: latest?.id,
-        loadedContent: content
+        id, title: scriptToOpen.name, content,
+        scriptId: scriptToOpen.id, loadedVersionId: latest?.id, loadedContent: content
       }])
       setActiveTabId(id)
       setBottomTab('versions')
@@ -108,7 +99,7 @@ export default function EditorArea({
     })
   }, [scriptToOpen])
 
-  // ── Open initial SQL (table double-click) ──────────────────────────────────
+  // ── Open initial SQL ──────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!initialSql) return
@@ -118,16 +109,14 @@ export default function EditorArea({
     onInitialSqlConsumed?.()
   }, [initialSql])
 
-  // ── Save version (Ctrl+S) ─────────────────────────────────────────────────
+  // ── Save version ──────────────────────────────────────────────────────────
 
   const saveCurrentVersion = useCallback(async (tabId: string) => {
     const tab = tabs.find((t) => t.id === tabId)
     if (!tab?.scriptId) return
     const version = await window.api.scripts.saveVersion(tab.scriptId, tab.content)
     setTabs((prev) => prev.map((t) =>
-      t.id === tabId
-        ? { ...t, loadedVersionId: version.id, loadedContent: tab.content }
-        : t
+      t.id === tabId ? { ...t, loadedVersionId: version.id, loadedContent: tab.content } : t
     ))
   }, [tabs])
 
@@ -135,14 +124,11 @@ export default function EditorArea({
 
   const executeQuery = useCallback(async () => {
     if (!activeConnectionId || !activeTab) return
-
     let sql = activeTab.content
     const editor = editorRef.current
     if (editor) {
-      const selection = editor.getSelection()
-      if (selection && !selection.isEmpty()) {
-        sql = editor.getModel()?.getValueInRange(selection) ?? sql
-      }
+      const sel = editor.getSelection()
+      if (sel && !sel.isEmpty()) sql = editor.getModel()?.getValueInRange(sel) ?? sql
     }
 
     const tabId = activeTabId
@@ -151,37 +137,25 @@ export default function EditorArea({
     try {
       const result = await window.api.query.execute(activeConnectionId, activeDatabase, sql.trim())
       setTabResults((prev) => ({ ...prev, [tabId]: { loading: false, result } }))
+      onLastQueryMs?.(result.durationMs)
 
-      // Script mode: save version on successful run + log
       if (activeTab.scriptId) {
         const version = await window.api.scripts.saveVersion(activeTab.scriptId, activeTab.content)
         setTabs((prev) => prev.map((t) =>
-          t.id === tabId
-            ? { ...t, loadedVersionId: version.id, loadedContent: activeTab.content }
-            : t
+          t.id === tabId ? { ...t, loadedVersionId: version.id, loadedContent: activeTab.content } : t
         ))
-        await window.api.scripts.logRun(
-          activeTab.scriptId, version.id,
-          activeConnectionId,
-          result.durationMs,
-          result.rowCount
-        )
+        await window.api.scripts.logRun(activeTab.scriptId, version.id, activeConnectionId, result.durationMs, result.rowCount)
       }
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e)
       setTabResults((prev) => ({ ...prev, [tabId]: { loading: false, error: errorMsg } }))
-
-      // Script mode: log error
       if (activeTab.scriptId) {
         const hash = simpleHash(activeTab.content).toString(16)
-        await window.api.scripts.logError(
-          activeTab.scriptId, hash, errorMsg, activeConnectionId
-        )
+        await window.api.scripts.logError(activeTab.scriptId, hash, errorMsg, activeConnectionId)
       }
     }
-
     setBottomTab('results')
-  }, [activeConnectionId, activeDatabase, activeTab, activeTabId])
+  }, [activeConnectionId, activeDatabase, activeTab, activeTabId, onLastQueryMs])
 
   // ── Load historical version ───────────────────────────────────────────────
 
@@ -196,40 +170,26 @@ export default function EditorArea({
   // ── Open diff tab ─────────────────────────────────────────────────────────
 
   function handleDiffVersions(older: ScriptVersion, newer: ScriptVersion) {
-    const versionNumbers = () => {
-      const all = tabs.find((t) => t.id === activeTabId)
-      return all?.title ?? 'Скрипт'
-    }
     const id = `diff-${older.id}-${newer.id}`
-    if (tabs.find((t) => t.id === id)) {
-      setActiveTabId(id)
-      return
+    if (!tabs.find((t) => t.id === id)) {
+      setTabs((prev) => [...prev, {
+        id, title: `Diff`, content: '',
+        isDiff: true, diffOriginal: older.content, diffModified: newer.content
+      }])
     }
-    setTabs((prev) => [...prev, {
-      id,
-      title: `Diff: ${versionNumbers()}`,
-      content: '',
-      isDiff: true,
-      diffOriginal: older.content,
-      diffModified: newer.content
-    }])
     setActiveTabId(id)
   }
 
   // ── Tab management ────────────────────────────────────────────────────────
 
   function updateContent(value: string | undefined) {
-    setTabs((prev) =>
-      prev.map((t) => (t.id === activeTabId ? { ...t, content: value ?? '' } : t))
-    )
+    setTabs((prev) => prev.map((t) => (t.id === activeTabId ? { ...t, content: value ?? '' } : t)))
   }
 
   function closeTab(id: string) {
     const remaining = tabs.filter((t) => t.id !== id)
     setTabs(remaining)
-    if (activeTabId === id && remaining.length > 0) {
-      setActiveTabId(remaining[remaining.length - 1].id)
-    }
+    if (activeTabId === id && remaining.length > 0) setActiveTabId(remaining[remaining.length - 1].id)
   }
 
   function newTab() {
@@ -243,54 +203,50 @@ export default function EditorArea({
 
   const handleEditorMount: OnMount = (editor) => {
     editorRef.current = editor
-    editor.addAction({
-      id: 'run-query',
-      label: 'Run Query',
-      keybindings: [2051], // Ctrl+Enter
-      run: () => { executeQuery() }
-    })
-    editor.addAction({
-      id: 'save-version',
-      label: 'Save Script Version',
-      keybindings: [2083], // Ctrl+S
-      run: () => { saveCurrentVersion(activeTabId) }
-    })
+    editor.addAction({ id: 'run-query', label: 'Run Query',
+      keybindings: [2051], run: () => executeQuery() })
+    editor.addAction({ id: 'save-version', label: 'Save Script Version',
+      keybindings: [2083], run: () => saveCurrentVersion(activeTabId) })
+    editor.addAction({ id: 'command-palette-custom', label: 'Open Command Palette',
+      keybindings: [2096], run: () => onOpenPalette?.() }) // Ctrl+Shift+P = 2048+512+80
   }
 
-  // ── Switch to versions panel when script tab is active ────────────────────
+  useEffect(() => {
+    if (!activeTab?.scriptId && bottomTab === 'versions') setBottomTab('results')
+  }, [activeTabId])
 
   useEffect(() => {
-    if (!activeTab?.scriptId && bottomTab === 'versions') {
-      setBottomTab('results')
-    }
-  }, [activeTabId])
+    if (!newTabTrigger) return
+    const id = Date.now().toString()
+    setTabs((prev) => [...prev, { id, title: `Query ${prev.length + 1}`, content: '' }])
+    setActiveTabId(id)
+    setBottomTab('results')
+  }, [newTabTrigger])
 
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col flex-1 overflow-hidden bg-[#1e1e1e]">
+    <div className="flex flex-col flex-1 overflow-hidden bg-vs-bg">
       {/* Tab Bar */}
-      <div className="flex items-center bg-[#2d2d2d] border-b border-[#3c3c3c] shrink-0 overflow-x-auto">
+      <div className="flex items-center bg-vs-tab border-b border-vs-border shrink-0 overflow-x-auto">
         {tabs.map((tab) => {
           const dirty = tab.scriptId != null && tab.content !== tab.loadedContent
           return (
             <div
               key={tab.id}
               onClick={() => { setActiveTabId(tab.id); if (tab.scriptId) setBottomTab('versions') }}
-              className={`
-                flex items-center gap-1.5 px-4 h-9 text-sm cursor-pointer shrink-0 border-r border-[#3c3c3c]
+              className={`flex items-center gap-1.5 px-4 h-9 text-sm cursor-pointer shrink-0 border-r border-vs-border
                 ${activeTabId === tab.id
-                  ? 'bg-[#1e1e1e] text-[#d4d4d4] border-t border-t-[#007acc]'
-                  : 'bg-[#2d2d2d] text-[#858585] hover:text-[#d4d4d4]'
-                }
-              `}
+                  ? 'bg-vs-tabActive text-vs-text border-t border-t-vs-statusBar'
+                  : 'bg-vs-tab text-vs-textDim hover:text-vs-text'
+                }`}
             >
               {tab.isDiff && <span className="text-[#ce9178] text-[10px]">⇄</span>}
               <span>{tab.title}</span>
-              {dirty && <span className="text-[#e6db74] text-xs leading-none" title="Несохранённые изменения">●</span>}
+              {dirty && <span className="text-[#e6db74] text-xs" title="Несохранённые изменения">●</span>}
               <button
                 onClick={(e) => { e.stopPropagation(); closeTab(tab.id) }}
-                className="hover:text-white opacity-60 hover:opacity-100 transition-opacity ml-0.5"
+                className="hover:text-vs-text opacity-60 hover:opacity-100 transition-opacity ml-0.5"
               >
                 <X size={12} />
               </button>
@@ -299,7 +255,7 @@ export default function EditorArea({
         })}
         <button
           onClick={newTab}
-          className="px-3 h-9 text-[#858585] hover:text-[#d4d4d4] hover:bg-[#2a2d2e] shrink-0 text-lg leading-none"
+          className="px-3 h-9 text-vs-textDim hover:text-vs-text hover:bg-vs-hover shrink-0 text-lg leading-none"
           title="Новый запрос"
         >
           +
@@ -307,7 +263,7 @@ export default function EditorArea({
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-3 py-1 bg-[#1e1e1e] border-b border-[#3c3c3c] shrink-0">
+      <div className="flex items-center gap-2 px-3 py-1 bg-vs-bg border-b border-vs-border shrink-0">
         {!activeTab?.isDiff && (
           <button
             onClick={executeQuery}
@@ -334,7 +290,7 @@ export default function EditorArea({
           <select
             value={activeDatabase ?? ''}
             onChange={(e) => setActiveDatabase(e.target.value || null)}
-            className="px-2 py-1 text-xs bg-[#3c3c3c] text-[#d4d4d4] border border-[#555] rounded outline-none hover:border-[#007acc] focus:border-[#007acc]"
+            className="px-2 py-1 text-xs bg-vs-input text-vs-text border border-vs-border rounded outline-none hover:border-vs-statusBar focus:border-vs-statusBar"
           >
             <option value="">-- база данных --</option>
             {activeDatabases.map((db) => (
@@ -344,7 +300,7 @@ export default function EditorArea({
         )}
 
         {!activeConnectionId && (
-          <span className="text-xs text-[#555]">Нет активного подключения</span>
+          <span className="text-xs text-vs-textDim">Нет активного подключения</span>
         )}
       </div>
 
@@ -355,27 +311,21 @@ export default function EditorArea({
             <DiffEditor
               height="100%"
               language="sql"
-              theme="vs-dark"
+              theme={monacoTheme}
               original={activeTab.diffOriginal ?? ''}
               modified={activeTab.diffModified ?? ''}
-              options={{
-                fontSize: 14,
-                fontFamily: "'Cascadia Code', 'Fira Code', Consolas, monospace",
-                readOnly: true,
-                renderSideBySide: true,
-                minimap: { enabled: false }
-              }}
+              options={{ fontSize: editorFontSize, fontFamily: "'Cascadia Code', 'Fira Code', Consolas, monospace", readOnly: true, renderSideBySide: true, minimap: { enabled: false } }}
             />
           ) : (
             <Editor
               height="100%"
               language="sql"
-              theme="vs-dark"
+              theme={monacoTheme}
               value={activeTab?.content ?? ''}
               onChange={updateContent}
               onMount={handleEditorMount}
               options={{
-                fontSize: 14,
+                fontSize: editorFontSize,
                 fontFamily: "'Cascadia Code', 'Fira Code', Consolas, monospace",
                 minimap: { enabled: false },
                 lineNumbers: 'on',
@@ -388,30 +338,19 @@ export default function EditorArea({
           )}
         </Panel>
 
-        <PanelResizeHandle className="h-1 bg-[#3c3c3c] hover:bg-[#007acc] transition-colors cursor-row-resize" />
+        <PanelResizeHandle className="h-1 bg-vs-border hover:bg-vs-statusBar transition-colors cursor-row-resize" />
 
         <Panel defaultSize={35} minSize={15}>
-          <div className="flex flex-col h-full bg-[#1e1e1e]">
-            {/* Bottom panel tab bar */}
-            <div className="flex items-center h-8 bg-[#252526] border-b border-[#3c3c3c] shrink-0">
-              <TabBtn active={bottomTab === 'results'} onClick={() => setBottomTab('results')}>
-                Результаты
-              </TabBtn>
+          <div className="flex flex-col h-full bg-vs-bg">
+            <div className="flex items-center h-8 bg-vs-panelHeader border-b border-vs-border shrink-0">
+              <TabBtn active={bottomTab === 'results'} onClick={() => setBottomTab('results')}>Результаты</TabBtn>
               {activeTab?.scriptId && (
-                <TabBtn active={bottomTab === 'versions'} onClick={() => setBottomTab('versions')}>
-                  Версии
-                </TabBtn>
+                <TabBtn active={bottomTab === 'versions'} onClick={() => setBottomTab('versions')}>Версии</TabBtn>
               )}
             </div>
-
-            {/* Bottom panel content */}
             <div className="flex-1 overflow-hidden">
               {bottomTab === 'results' && (
-                <ResultsGrid
-                  result={activeResult?.result}
-                  error={activeResult?.error}
-                  loading={activeResult?.loading}
-                />
+                <ResultsGrid result={activeResult?.result} error={activeResult?.error} loading={activeResult?.loading} />
               )}
               {bottomTab === 'versions' && activeTab?.scriptId && (
                 <VersionsPanel
@@ -435,12 +374,11 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
     <button
       onClick={onClick}
       className={`px-4 h-full text-xs transition-colors ${
-        active
-          ? 'text-[#d4d4d4] border-t border-t-[#007acc] bg-[#1e1e1e]'
-          : 'text-[#858585] hover:text-[#d4d4d4]'
+        active ? 'text-vs-text border-t border-t-vs-statusBar bg-vs-bg' : 'text-vs-textDim hover:text-vs-text'
       }`}
     >
       {children}
     </button>
   )
 }
+

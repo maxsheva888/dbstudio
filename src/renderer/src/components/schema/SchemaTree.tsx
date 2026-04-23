@@ -75,23 +75,21 @@ export default function SchemaTree({ onTableSelect }: Props) {
         const isActive = db === activeDatabase
         return (
           <div key={db}>
-            {/* Database row */}
             <div
               className={`flex items-center gap-1 px-2 py-0.5 cursor-pointer rounded mx-1
-                ${isActive ? 'bg-[#094771]' : 'hover:bg-[#2a2d2e]'}`}
+                ${isActive ? 'bg-vs-selected text-white' : 'hover:bg-vs-hover'}`}
               onClick={() => { setActiveDatabase(db); toggleDb(db) }}
             >
               {ds?.loading
-                ? <Loader2 size={13} className="animate-spin text-[#007acc] shrink-0" />
+                ? <Loader2 size={13} className="animate-spin text-vs-statusBar shrink-0" />
                 : ds?.expanded
-                  ? <ChevronDown size={13} className="text-[#858585] shrink-0" />
-                  : <ChevronRight size={13} className="text-[#858585] shrink-0" />
+                  ? <ChevronDown size={13} className="text-vs-textDim shrink-0" />
+                  : <ChevronRight size={13} className="text-vs-textDim shrink-0" />
               }
               <Database size={14} className="text-[#c09030] shrink-0" />
-              <span className="truncate text-[#d4d4d4]">{db}</span>
+              <span className="truncate text-vs-text">{db}</span>
             </div>
 
-            {/* Tables */}
             {ds?.expanded && ds.tables && (
               <div className="ml-4">
                 {ds.tables.map((t) => {
@@ -101,39 +99,38 @@ export default function SchemaTree({ onTableSelect }: Props) {
                   return (
                     <div key={t.name}>
                       <div
-                        className="flex items-center gap-1 px-2 py-0.5 cursor-pointer rounded mx-1 hover:bg-[#2a2d2e] group"
+                        className="flex items-center gap-1 px-2 py-0.5 cursor-pointer rounded mx-1 hover:bg-vs-hover group"
                         onClick={() => toggleTable(db, t.name)}
                         onDoubleClick={() => onTableSelect?.(db, t.name)}
                         title="Двойной клик — SELECT * FROM table"
                       >
                         {ts?.loading
-                          ? <Loader2 size={12} className="animate-spin text-[#007acc] shrink-0" />
+                          ? <Loader2 size={12} className="animate-spin text-vs-statusBar shrink-0" />
                           : ts?.expanded
-                            ? <ChevronDown size={12} className="text-[#858585] shrink-0" />
-                            : <ChevronRight size={12} className="text-[#858585] shrink-0" />
+                            ? <ChevronDown size={12} className="text-vs-textDim shrink-0" />
+                            : <ChevronRight size={12} className="text-vs-textDim shrink-0" />
                         }
                         {isView
                           ? <Eye size={13} className="text-[#4a9cd6] shrink-0" />
                           : <Table2 size={13} className="text-[#4a9cd6] shrink-0" />
                         }
-                        <span className="truncate text-[#d4d4d4]">{t.name}</span>
+                        <span className="truncate text-vs-text">{t.name}</span>
                       </div>
 
-                      {/* Columns */}
                       {ts?.expanded && ts.columns && (
                         <div className="ml-8">
                           {ts.columns.map((col) => (
                             <div
                               key={col.name}
-                              className="flex items-center gap-1 px-2 py-0.5 text-xs text-[#858585] hover:bg-[#2a2d2e] rounded mx-1 cursor-default"
+                              className="flex items-center gap-1 px-2 py-0.5 text-xs text-vs-textDim hover:bg-vs-hover rounded mx-1 cursor-default"
                               title={`${col.type}${col.nullable ? ' NULL' : ' NOT NULL'}${col.extra ? ' ' + col.extra : ''}`}
                             >
                               {col.key === 'PRI'
                                 ? <KeyRound size={11} className="text-[#ffd700] shrink-0" />
-                                : <Columns3 size={11} className="text-[#858585] shrink-0" />
+                                : <Columns3 size={11} className="text-vs-textDim shrink-0" />
                               }
                               <span className="truncate">{col.name}</span>
-                              <span className="ml-auto text-[#555] truncate max-w-[60px]">{col.type.split('(')[0]}</span>
+                              <span className="ml-auto text-vs-textDim opacity-60 truncate max-w-[60px]">{col.type.split('(')[0]}</span>
                             </div>
                           ))}
                         </div>

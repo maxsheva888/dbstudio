@@ -33,27 +33,27 @@ export default function NewScriptModal({ onSave, onClose }: Props) {
     >
       <form
         onSubmit={handleSubmit}
-        className="bg-[#252526] border border-[#3c3c3c] rounded shadow-xl w-96 p-5 flex flex-col gap-4"
+        className="bg-vs-sidebar border border-vs-border rounded shadow-xl w-96 p-5 flex flex-col gap-4"
       >
-        <h2 className="text-sm font-semibold text-[#d4d4d4]">Новый скрипт</h2>
+        <h2 className="text-sm font-semibold text-vs-text">Новый скрипт</h2>
 
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-[#858585]">Название</label>
+          <label className="text-xs text-vs-textDim">Название</label>
           <input
             autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Например: Active Users"
-            className="px-3 py-1.5 text-sm bg-[#3c3c3c] text-[#d4d4d4] border border-[#555] rounded outline-none focus:border-[#007acc]"
+            className="px-3 py-1.5 text-sm bg-vs-input text-vs-text border border-vs-border rounded outline-none focus:border-vs-statusBar"
           />
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-[#858585]">Область действия</label>
+          <label className="text-xs text-vs-textDim">Область действия</label>
           <select
             value={scopeType}
             onChange={(e) => setScopeType(e.target.value as 'global' | 'db' | 'table')}
-            className="px-3 py-1.5 text-sm bg-[#3c3c3c] text-[#d4d4d4] border border-[#555] rounded outline-none focus:border-[#007acc]"
+            className="px-3 py-1.5 text-sm bg-vs-input text-vs-text border border-vs-border rounded outline-none focus:border-vs-statusBar"
           >
             <option value="global">Глобальный</option>
             <option value="db">База данных</option>
@@ -63,12 +63,12 @@ export default function NewScriptModal({ onSave, onClose }: Props) {
 
         {(scopeType === 'db' || scopeType === 'table') && (
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-[#858585]">База данных</label>
+            <label className="text-xs text-vs-textDim">База данных</label>
             {activeDatabases.length > 0 ? (
               <select
                 value={dbName}
                 onChange={(e) => setDbName(e.target.value)}
-                className="px-3 py-1.5 text-sm bg-[#3c3c3c] text-[#d4d4d4] border border-[#555] rounded outline-none focus:border-[#007acc]"
+                className="px-3 py-1.5 text-sm bg-vs-input text-vs-text border border-vs-border rounded outline-none focus:border-vs-statusBar"
               >
                 {activeDatabases.map((db) => (
                   <option key={db} value={db}>{db}</option>
@@ -79,7 +79,7 @@ export default function NewScriptModal({ onSave, onClose }: Props) {
                 value={dbName}
                 onChange={(e) => setDbName(e.target.value)}
                 placeholder="Имя базы данных"
-                className="px-3 py-1.5 text-sm bg-[#3c3c3c] text-[#d4d4d4] border border-[#555] rounded outline-none focus:border-[#007acc]"
+                className="px-3 py-1.5 text-sm bg-vs-input text-vs-text border border-vs-border rounded outline-none focus:border-vs-statusBar"
               />
             )}
           </div>
@@ -87,12 +87,12 @@ export default function NewScriptModal({ onSave, onClose }: Props) {
 
         {scopeType === 'table' && (
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-[#858585]">Таблица</label>
+            <label className="text-xs text-vs-textDim">Таблица</label>
             <input
               value={tableName}
               onChange={(e) => setTableName(e.target.value)}
               placeholder="Имя таблицы"
-              className="px-3 py-1.5 text-sm bg-[#3c3c3c] text-[#d4d4d4] border border-[#555] rounded outline-none focus:border-[#007acc]"
+              className="px-3 py-1.5 text-sm bg-vs-input text-vs-text border border-vs-border rounded outline-none focus:border-vs-statusBar"
             />
           </div>
         )}
@@ -101,7 +101,7 @@ export default function NewScriptModal({ onSave, onClose }: Props) {
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-1.5 text-sm text-[#d4d4d4] hover:text-white hover:bg-[#3c3c3c] rounded transition-colors"
+            className="px-4 py-1.5 text-sm text-vs-textDim hover:text-vs-text hover:bg-vs-hover rounded transition-colors"
           >
             Отмена
           </button>

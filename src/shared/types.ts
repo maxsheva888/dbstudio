@@ -80,3 +80,10 @@ export interface ScriptStats {
   lastRunAt: number | null
   errorCount: number
 }
+
+export interface ScriptSuggestions {
+  favourites: Array<ScriptFile & { runCount: number }>
+  recent: Array<ScriptFile & { lastRunAt: number }>
+  contextual: ScriptFile[]
+  archiveCandidates: Array<ScriptFile & { lastRunAt: number | null }>
+}

@@ -2,7 +2,7 @@
 import type {
   ConnectionConfig, TestConnectionResult,
   TableInfo, ColumnInfo, QueryResult,
-  ScriptFile, ScriptVersion, ScriptStats
+  ScriptFile, ScriptVersion, ScriptStats, ScriptSuggestions
 } from '@shared/types'
 
 declare global {
@@ -34,6 +34,8 @@ declare global {
         logRun: (scriptId: string, versionId: number, connectionId: string, durationMs: number, rowCount: number) => Promise<void>
         logError: (scriptId: string, contentHash: string, errorMessage: string, connectionId: string | null) => Promise<void>
         stats: (scriptId: string) => Promise<ScriptStats>
+        suggestions: (activeDb: string | null, activeTable: string | null, threshold?: number) => Promise<ScriptSuggestions>
+        search: (query: string) => Promise<ScriptFile[]>
       }
     }
   }

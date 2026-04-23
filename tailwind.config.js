@@ -5,26 +5,25 @@ export default {
     extend: {
       colors: {
         vs: {
-          bg:           '#1e1e1e',
-          sidebar:      '#252526',
-          activityBar:  '#333333',
-          tab:          '#2d2d2d',
-          tabActive:    '#1e1e1e',
-          tabBorder:    '#1e1e1e',
-          statusBar:    '#007acc',
-          border:       '#3c3c3c',
-          text:         '#d4d4d4',
-          textDim:      '#858585',
-          hover:        '#2a2d2e',
-          selected:     '#094771',
-          input:        '#3c3c3c',
-          panelHeader:  '#252526',
+          bg:          'var(--vs-bg)',
+          sidebar:     'var(--vs-sidebar)',
+          activityBar: 'var(--vs-activity-bar)',
+          tab:         'var(--vs-tab)',
+          tabActive:   'var(--vs-tab-active)',
+          border:      'var(--vs-border)',
+          text:        'var(--vs-text)',
+          textDim:     'var(--vs-text-dim)',
+          hover:       'var(--vs-hover)',
+          selected:    'var(--vs-selected)',
+          input:       'var(--vs-input)',
+          panelHeader: 'var(--vs-panel-header)',
+          statusBar:   'var(--vs-status-bar)',
         }
       },
       fontSize: {
         '2xs': '11px',
-        xs: '12px',
-        sm: '13px',
+        xs:    '12px',
+        sm:    '13px',
       }
     }
   },

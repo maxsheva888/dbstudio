@@ -3,7 +3,7 @@ import { join } from 'path'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { createHash } from 'crypto'
 import { randomUUID } from 'crypto'
-import type { ScriptFile, ScriptVersion, RunLog, ErrorLog, ScriptStats } from '../../shared/types'
+import type { ScriptFile, ScriptVersion, RunLog, ErrorLog, ScriptStats, ScriptSuggestions } from '../../shared/types'
 
 interface ScriptsData {
   scripts: ScriptFile[]
@@ -166,4 +166,91 @@ export function getStats(scriptId: string): ScriptStats {
     lastRunAt: lastRun?.ranAt ?? null,
     errorCount: errors.length
   }
+}
+
+// ── Suggestions ───────────────────────────────────────────────────────────────
+
+export function getSuggestions(
+  activeDb: string | null,
+  activeTable: string | null,
+  favouriteThreshold = 5
+): ScriptSuggestions {
+  const data = load()
+  const now = Date.now()
+  const sevenDays = 7 * 24 * 60 * 60 * 1000
+  const thirtyDays = 30 * 24 * 60 * 60 * 1000
+
+  // Build stats map
+  const statsMap = new Map<string, { runCount: number; lastRunAt: number | null }>()
+  for (const script of data.scripts) {
+    const runs = data.runLogs.filter((r) => r.scriptId === script.id)
+    const lastRun = runs.sort((a, b) => b.ranAt - a.ranAt)[0]
+    statsMap.set(script.id, {
+      runCount: runs.length,
+      lastRunAt: lastRun?.ranAt ?? null
+    })
+  }
+
+  const favourites = data.scripts
+    .filter((s) => (statsMap.get(s.id)?.runCount ?? 0) >= favouriteThreshold)
+    .sort((a, b) => (statsMap.get(b.id)?.runCount ?? 0) - (statsMap.get(a.id)?.runCount ?? 0))
+    .slice(0, 10)
+    .map((s) => ({ ...s, runCount: statsMap.get(s.id)?.runCount ?? 0 }))
+
+  const recent = data.scripts
+    .filter((s) => {
+      const last = statsMap.get(s.id)?.lastRunAt
+      return last != null && now - last < sevenDays
+    })
+    .sort((a, b) => (statsMap.get(b.id)?.lastRunAt ?? 0) - (statsMap.get(a.id)?.lastRunAt ?? 0))
+    .slice(0, 10)
+    .map((s) => ({ ...s, lastRunAt: statsMap.get(s.id)?.lastRunAt ?? 0 }))
+
+  const contextual: ScriptFile[] = []
+  if (activeTable && activeDb) {
+    const tableScope = `table:${activeDb}.${activeTable}`
+    contextual.push(...data.scripts.filter((s) => s.scope === tableScope))
+  }
+  if (activeDb) {
+    const dbScope = `db:${activeDb}`
+    contextual.push(...data.scripts.filter((s) => s.scope === dbScope && !contextual.find((c) => c.id === s.id)))
+  }
+
+  const archiveCandidates = data.scripts
+    .filter((s) => {
+      const last = statsMap.get(s.id)?.lastRunAt
+      return last == null || now - last > thirtyDays
+    })
+    .map((s) => ({ ...s, lastRunAt: statsMap.get(s.id)?.lastRunAt ?? null }))
+    .slice(0, 5)
+
+  return { favourites, recent, contextual, archiveCandidates }
+}
+
+// ── Full-text search ──────────────────────────────────────────────────────────
+
+export function searchScripts(query: string): ScriptFile[] {
+  if (!query.trim()) return listScripts()
+  const data = load()
+  const q = query.toLowerCase()
+
+  // Build map of scriptId → latest version content
+  const latestContent = new Map<string, string>()
+  for (const script of data.scripts) {
+    const latest = data.versions
+      .filter((v) => v.scriptId === script.id)
+      .sort((a, b) => b.createdAt - a.createdAt)[0]
+    if (latest) latestContent.set(script.id, latest.content.toLowerCase())
+  }
+
+  return data.scripts
+    .filter((s) =>
+      s.name.toLowerCase().includes(q) ||
+      (latestContent.get(s.id) ?? '').includes(q)
+    )
+    .sort((a, b) => {
+      const aName = a.name.toLowerCase().startsWith(q) ? 1 : 0
+      const bName = b.name.toLowerCase().startsWith(q) ? 1 : 0
+      return bName - aName
+    })
 }

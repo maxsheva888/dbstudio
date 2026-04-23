@@ -2,7 +2,48 @@
 @tailwind components;
 @tailwind utilities;
 
-* {
+/* ── VS Code Dark+ (default) ─────────────────────────────────────────── */
+:root {
+  --vs-bg:           #1e1e1e;
+  --vs-sidebar:      #252526;
+  --vs-activity-bar: #333333;
+  --vs-tab:          #2d2d2d;
+  --vs-tab-active:   #1e1e1e;
+  --vs-border:       #3c3c3c;
+  --vs-text:         #d4d4d4;
+  --vs-text-dim:     #858585;
+  --vs-hover:        #2a2d2e;
+  --vs-selected:     #094771;
+  --vs-input:        #3c3c3c;
+  --vs-panel-header: #252526;
+  --vs-status-bar:   #007acc;
+  --vs-scrollbar:    #424242;
+  --vs-scrollbar-h:  #555555;
+  --editor-theme:    vs-dark;
+}
+
+/* ── VS Code Light ───────────────────────────────────────────────────── */
+.light {
+  --vs-bg:           #ffffff;
+  --vs-sidebar:      #f3f3f3;
+  --vs-activity-bar: #2c2c2c;
+  --vs-tab:          #ececec;
+  --vs-tab-active:   #ffffff;
+  --vs-border:       #c8c8c8;
+  --vs-text:         #1f1f1f;
+  --vs-text-dim:     #717171;
+  --vs-hover:        #e8e8e8;
+  --vs-selected:     #1565c0;
+  --vs-input:        #f5f5f5;
+  --vs-panel-header: #f3f3f3;
+  --vs-status-bar:   #007acc;
+  --vs-scrollbar:    #c0c0c0;
+  --vs-scrollbar-h:  #999999;
+  --editor-theme:    vs;
+}
+
+/* ── Reset ───────────────────────────────────────────────────────────── */
+*, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -14,32 +55,30 @@ html, body, #root {
 }
 
 body {
-  background-color: #1e1e1e;
-  color: #d4d4d4;
+  background-color: var(--vs-bg);
+  color: var(--vs-text);
   font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 13px;
   user-select: none;
 }
 
+/* ── Scrollbars ──────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
-
 ::-webkit-scrollbar-track {
   background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: #424242;
+  background: var(--vs-scrollbar);
   border-radius: 2px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: var(--vs-scrollbar-h);
 }
 
-/* Allow text selection inside editor and results */
+/* ── Text selection ──────────────────────────────────────────────────── */
 .selectable {
   user-select: text;
 }

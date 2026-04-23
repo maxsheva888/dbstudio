@@ -23,7 +23,7 @@ export default function Sidebar({ activePanel, onTableSelect, onOpenScript }: Pr
   function openEdit(c: ConnectionConfig) { setEditing(c); setShowModal(true) }
 
   return (
-    <div className="flex flex-col w-64 bg-[#252526] border-r border-[#3c3c3c] shrink-0 overflow-hidden">
+    <div className="flex flex-col w-64 bg-vs-sidebar border-r border-vs-border shrink-0 overflow-hidden">
       <PanelHeader
         title={panelTitle(activePanel)}
         onAdd={activePanel === 'connections' ? openNew : undefined}
@@ -35,7 +35,9 @@ export default function Sidebar({ activePanel, onTableSelect, onOpenScript }: Pr
         {activePanel === 'scripts' && onOpenScript && (
           <ScriptPanel onOpenScript={onOpenScript} />
         )}
-        {activePanel === 'history' && <EmptyState text="История пуста" sub="Запросы появятся после выполнения" />}
+        {activePanel === 'history' && (
+          <EmptyState text="История пуста" sub="Запросы появятся после выполнения" />
+        )}
       </div>
 
       {showModal && (
@@ -65,11 +67,8 @@ function ConnectionsPanel({
       return
     }
     setConnecting(conn.id)
-    try {
-      await connect(conn.id)
-    } finally {
-      setConnecting(null)
-    }
+    try { await connect(conn.id) }
+    finally { setConnecting(null) }
   }
 
   if (connections.length === 0) {
@@ -83,30 +82,23 @@ function ConnectionsPanel({
         const isConnecting = connecting === conn.id
         return (
           <div key={conn.id}>
-            <div
-              className={`group flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm
-                ${isActive ? 'bg-[#094771] text-white' : 'text-[#d4d4d4] hover:bg-[#2a2d2e]'}
-              `}
+            <div className={`group flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm
+              ${isActive ? 'bg-vs-selected text-white' : 'text-vs-text hover:bg-vs-hover'}`}
             >
-              <span
-                className="flex-1 truncate"
-                title={`${conn.user}@${conn.host}:${conn.port}`}
-              >
+              <span className="flex-1 truncate" title={`${conn.user}@${conn.host}:${conn.port}`}>
                 {conn.name}
               </span>
-
-              {isConnecting && <Loader2 size={13} className="animate-spin shrink-0 text-[#007acc]" />}
-
+              {isConnecting && <Loader2 size={13} className="animate-spin shrink-0 text-vs-statusBar" />}
               {!isConnecting && (
                 <div className="flex gap-1 invisible group-hover:visible">
                   <button
                     title={isActive ? 'Отключиться' : 'Подключиться'}
                     onClick={() => handleConnect(conn)}
-                    className={`p-0.5 ${isActive ? 'hover:text-red-400' : 'hover:text-[#007acc]'}`}
+                    className={`p-0.5 ${isActive ? 'hover:text-red-400' : 'hover:text-vs-statusBar'}`}
                   >
                     {isActive ? <PlugZap size={13} /> : <Plug size={13} />}
                   </button>
-                  <button title="Редактировать" onClick={() => onEdit(conn)} className="p-0.5 hover:text-[#d4d4d4]">
+                  <button title="Редактировать" onClick={() => onEdit(conn)} className="p-0.5 hover:text-vs-text">
                     <Pencil size={13} />
                   </button>
                   <button title="Удалить" onClick={() => deleteConnection(conn.id)} className="p-0.5 hover:text-red-400">
@@ -115,11 +107,7 @@ function ConnectionsPanel({
                 </div>
               )}
             </div>
-
-            {/* Schema tree shown inline when this connection is active */}
-            {isActive && (
-              <SchemaTree onTableSelect={onTableSelect} />
-            )}
+            {isActive && <SchemaTree onTableSelect={onTableSelect} />}
           </div>
         )
       })}
@@ -130,9 +118,9 @@ function ConnectionsPanel({
 function PanelHeader({ title, onAdd }: { title: string; onAdd?: () => void }) {
   return (
     <div className="flex items-center justify-between px-4 py-2 h-9 shrink-0">
-      <span className="text-xs font-semibold uppercase tracking-widest text-[#bbb]">{title}</span>
+      <span className="text-xs font-semibold uppercase tracking-widest text-vs-textDim">{title}</span>
       {onAdd && (
-        <button onClick={onAdd} title="Добавить" className="text-[#858585] hover:text-[#d4d4d4] transition-colors">
+        <button onClick={onAdd} title="Добавить" className="text-vs-textDim hover:text-vs-text transition-colors">
           <Plus size={16} />
         </button>
       )}
@@ -143,8 +131,8 @@ function PanelHeader({ title, onAdd }: { title: string; onAdd?: () => void }) {
 function EmptyState({ text, sub }: { text: string; sub: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center gap-1 px-4">
-      <span className="text-sm text-[#858585]">{text}</span>
-      <span className="text-xs text-[#555]">{sub}</span>
+      <span className="text-sm text-vs-textDim">{text}</span>
+      <span className="text-xs text-vs-textDim opacity-60">{sub}</span>
     </div>
   )
 }
