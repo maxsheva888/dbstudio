@@ -3,6 +3,7 @@ import { join } from 'path'
 import { registerConnectionHandlers } from './ipc/connections'
 import { registerSchemaHandlers } from './ipc/schema'
 import { registerQueryHandlers } from './ipc/query'
+import { registerScriptsHandlers } from './ipc/scripts'
 
 const isDev = process.env.NODE_ENV !== 'production'
 
@@ -46,6 +47,7 @@ app.whenReady().then(() => {
   registerConnectionHandlers()
   registerSchemaHandlers()
   registerQueryHandlers()
+  registerScriptsHandlers()
   createWindow()
 
   app.on('activate', () => {

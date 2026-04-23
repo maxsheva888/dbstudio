@@ -3,16 +3,18 @@ import { Plus, Plug, Pencil, Trash2, Loader2, PlugZap } from 'lucide-react'
 import { useConnections } from '@renderer/context/ConnectionsContext'
 import ConnectionModal from '@renderer/components/connections/ConnectionModal'
 import SchemaTree from '@renderer/components/schema/SchemaTree'
-import type { ConnectionConfig } from '@shared/types'
+import ScriptPanel from '@renderer/components/scripts/ScriptPanel'
+import type { ConnectionConfig, ScriptFile } from '@shared/types'
 
 type Panel = 'connections' | 'scripts' | 'history'
 
 interface Props {
   activePanel: Panel
   onTableSelect?: (database: string, table: string) => void
+  onOpenScript?: (script: ScriptFile) => void
 }
 
-export default function Sidebar({ activePanel, onTableSelect }: Props) {
+export default function Sidebar({ activePanel, onTableSelect, onOpenScript }: Props) {
   const { saveConnection } = useConnections()
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<ConnectionConfig | undefined>()
@@ -30,7 +32,9 @@ export default function Sidebar({ activePanel, onTableSelect }: Props) {
         {activePanel === 'connections' && (
           <ConnectionsPanel onEdit={openEdit} onTableSelect={onTableSelect} />
         )}
-        {activePanel === 'scripts' && <EmptyState text="Нет скриптов" sub="Будет добавлено в Фазе 2" />}
+        {activePanel === 'scripts' && onOpenScript && (
+          <ScriptPanel onOpenScript={onOpenScript} />
+        )}
         {activePanel === 'history' && <EmptyState text="История пуста" sub="Запросы появятся после выполнения" />}
       </div>
 

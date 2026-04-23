@@ -1,7 +1,8 @@
 /// <reference types="vite/client" />
 import type {
   ConnectionConfig, TestConnectionResult,
-  TableInfo, ColumnInfo, QueryResult
+  TableInfo, ColumnInfo, QueryResult,
+  ScriptFile, ScriptVersion, ScriptStats
 } from '@shared/types'
 
 declare global {
@@ -21,6 +22,18 @@ declare global {
       }
       query: {
         execute: (connectionId: string, database: string | null, sql: string) => Promise<QueryResult>
+      }
+      scripts: {
+        list: () => Promise<ScriptFile[]>
+        create: (name: string, scope: string) => Promise<ScriptFile>
+        rename: (id: string, name: string) => Promise<void>
+        delete: (id: string) => Promise<void>
+        versions: (scriptId: string) => Promise<ScriptVersion[]>
+        getVersion: (versionId: number) => Promise<ScriptVersion | null>
+        saveVersion: (scriptId: string, content: string) => Promise<ScriptVersion>
+        logRun: (scriptId: string, versionId: number, connectionId: string, durationMs: number, rowCount: number) => Promise<void>
+        logError: (scriptId: string, contentHash: string, errorMessage: string, connectionId: string | null) => Promise<void>
+        stats: (scriptId: string) => Promise<ScriptStats>
       }
     }
   }

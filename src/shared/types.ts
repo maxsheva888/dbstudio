@@ -36,3 +36,47 @@ export interface QueryResult {
   affectedRows?: number
   durationMs: number
 }
+
+// ── Script Library ───────────────────────────────────────────────────────────
+
+export interface ScriptFile {
+  id: string
+  name: string
+  /** 'global' | 'db:<dbName>' | 'table:<db>.<table>' */
+  scope: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface ScriptVersion {
+  id: number
+  scriptId: string
+  content: string
+  hash: string
+  createdAt: number
+}
+
+export interface RunLog {
+  id: number
+  scriptId: string
+  versionId: number
+  connectionId: string
+  durationMs: number
+  rowCount: number
+  ranAt: number
+}
+
+export interface ErrorLog {
+  id: number
+  scriptId: string
+  contentHash: string
+  errorMessage: string
+  connectionId: string | null
+  ranAt: number
+}
+
+export interface ScriptStats {
+  runCount: number
+  lastRunAt: number | null
+  errorCount: number
+}
