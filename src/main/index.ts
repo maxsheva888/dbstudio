@@ -1,6 +1,8 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { registerConnectionHandlers } from './ipc/connections'
+import { registerSchemaHandlers } from './ipc/schema'
+import { registerQueryHandlers } from './ipc/query'
 
 const isDev = process.env.NODE_ENV !== 'production'
 
@@ -42,6 +44,8 @@ app.whenReady().then(() => {
   if (process.platform === 'win32') app.setAppUserModelId('com.dbstudio')
 
   registerConnectionHandlers()
+  registerSchemaHandlers()
+  registerQueryHandlers()
   createWindow()
 
   app.on('activate', () => {

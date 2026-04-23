@@ -15,7 +15,24 @@ export interface TestConnectionResult {
   latencyMs?: number
 }
 
-export interface ActiveConnection {
-  connectionId: string
-  databases: string[]
+export interface TableInfo {
+  name: string
+  tableType: 'BASE TABLE' | 'VIEW' | string
+}
+
+export interface ColumnInfo {
+  name: string
+  type: string
+  nullable: boolean
+  key: string
+  default: string | null
+  extra: string
+}
+
+export interface QueryResult {
+  columns: string[]
+  rows: Record<string, unknown>[]
+  rowCount: number
+  affectedRows?: number
+  durationMs: number
 }

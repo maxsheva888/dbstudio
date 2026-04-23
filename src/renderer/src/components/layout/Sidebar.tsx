@@ -1,16 +1,18 @@
 import React, { useState } from 'react'
-import { Plus, Plug, Pencil, Trash2, ChevronRight, Loader2 } from 'lucide-react'
+import { Plus, Plug, Pencil, Trash2, Loader2, PlugZap } from 'lucide-react'
 import { useConnections } from '@renderer/context/ConnectionsContext'
 import ConnectionModal from '@renderer/components/connections/ConnectionModal'
+import SchemaTree from '@renderer/components/schema/SchemaTree'
 import type { ConnectionConfig } from '@shared/types'
 
 type Panel = 'connections' | 'scripts' | 'history'
 
 interface Props {
   activePanel: Panel
+  onTableSelect?: (database: string, table: string) => void
 }
 
-export default function Sidebar({ activePanel }: Props) {
+export default function Sidebar({ activePanel, onTableSelect }: Props) {
   const { saveConnection } = useConnections()
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<ConnectionConfig | undefined>()
@@ -25,7 +27,9 @@ export default function Sidebar({ activePanel }: Props) {
         onAdd={activePanel === 'connections' ? openNew : undefined}
       />
       <div className="flex-1 overflow-y-auto">
-        {activePanel === 'connections' && <ConnectionsPanel onEdit={openEdit} />}
+        {activePanel === 'connections' && (
+          <ConnectionsPanel onEdit={openEdit} onTableSelect={onTableSelect} />
+        )}
         {activePanel === 'scripts' && <EmptyState text="Нет скриптов" sub="Будет добавлено в Фазе 2" />}
         {activePanel === 'history' && <EmptyState text="История пуста" sub="Запросы появятся после выполнения" />}
       </div>
@@ -41,15 +45,24 @@ export default function Sidebar({ activePanel }: Props) {
   )
 }
 
-function ConnectionsPanel({ onEdit }: { onEdit: (c: ConnectionConfig) => void }) {
-  const { connections, activeConnectionId, deleteConnection, setActiveConnectionId } = useConnections()
+function ConnectionsPanel({
+  onEdit,
+  onTableSelect
+}: {
+  onEdit: (c: ConnectionConfig) => void
+  onTableSelect?: (database: string, table: string) => void
+}) {
+  const { connections, activeConnectionId, deleteConnection, connect, disconnect } = useConnections()
   const [connecting, setConnecting] = useState<string | null>(null)
 
   async function handleConnect(conn: ConnectionConfig) {
+    if (activeConnectionId === conn.id) {
+      await disconnect(conn.id)
+      return
+    }
     setConnecting(conn.id)
     try {
-      await window.api.connections.getDatabases(conn)
-      setActiveConnectionId(conn.id)
+      await connect(conn.id)
     } finally {
       setConnecting(null)
     }
@@ -65,35 +78,43 @@ function ConnectionsPanel({ onEdit }: { onEdit: (c: ConnectionConfig) => void })
         const isActive = conn.id === activeConnectionId
         const isConnecting = connecting === conn.id
         return (
-          <div
-            key={conn.id}
-            className={`group flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm
-              ${isActive ? 'bg-[#094771] text-white' : 'text-[#d4d4d4] hover:bg-[#2a2d2e]'}
-            `}
-          >
-            <ChevronRight size={14} className={`shrink-0 ${isActive ? 'text-white/60' : 'text-[#555]'}`} />
-            <span
-              className="flex-1 truncate"
-              onDoubleClick={() => handleConnect(conn)}
-              title={`${conn.user}@${conn.host}:${conn.port}`}
+          <div key={conn.id}>
+            <div
+              className={`group flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm
+                ${isActive ? 'bg-[#094771] text-white' : 'text-[#d4d4d4] hover:bg-[#2a2d2e]'}
+              `}
             >
-              {conn.name}
-            </span>
+              <span
+                className="flex-1 truncate"
+                title={`${conn.user}@${conn.host}:${conn.port}`}
+              >
+                {conn.name}
+              </span>
 
-            {isConnecting && <Loader2 size={13} className="animate-spin shrink-0 text-[#007acc]" />}
+              {isConnecting && <Loader2 size={13} className="animate-spin shrink-0 text-[#007acc]" />}
 
-            {!isConnecting && (
-              <div className="flex gap-1 invisible group-hover:visible">
-                <button title="Подключиться" onClick={() => handleConnect(conn)} className="p-0.5 hover:text-[#007acc]">
-                  <Plug size={13} />
-                </button>
-                <button title="Редактировать" onClick={() => onEdit(conn)} className="p-0.5 hover:text-[#d4d4d4]">
-                  <Pencil size={13} />
-                </button>
-                <button title="Удалить" onClick={() => deleteConnection(conn.id)} className="p-0.5 hover:text-red-400">
-                  <Trash2 size={13} />
-                </button>
-              </div>
+              {!isConnecting && (
+                <div className="flex gap-1 invisible group-hover:visible">
+                  <button
+                    title={isActive ? 'Отключиться' : 'Подключиться'}
+                    onClick={() => handleConnect(conn)}
+                    className={`p-0.5 ${isActive ? 'hover:text-red-400' : 'hover:text-[#007acc]'}`}
+                  >
+                    {isActive ? <PlugZap size={13} /> : <Plug size={13} />}
+                  </button>
+                  <button title="Редактировать" onClick={() => onEdit(conn)} className="p-0.5 hover:text-[#d4d4d4]">
+                    <Pencil size={13} />
+                  </button>
+                  <button title="Удалить" onClick={() => deleteConnection(conn.id)} className="p-0.5 hover:text-red-400">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Schema tree shown inline when this connection is active */}
+            {isActive && (
+              <SchemaTree onTableSelect={onTableSelect} />
             )}
           </div>
         )

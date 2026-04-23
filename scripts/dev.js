@@ -10,5 +10,9 @@ delete env.ELECTRON_RUN_AS_NODE
 const evite = path.join(__dirname, '..', 'node_modules', '.bin', 'electron-vite')
 const isWin = process.platform === 'win32'
 
-const child = spawn(isWin ? evite + '.cmd' : evite, ['dev'], { stdio: 'inherit', env })
+const child = spawn(
+  isWin ? evite + '.cmd' : evite,
+  ['dev'],
+  { stdio: 'inherit', env, shell: isWin }
+)
 child.on('close', (code) => process.exit(code ?? 0))
