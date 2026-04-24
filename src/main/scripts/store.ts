@@ -3,13 +3,15 @@ import { join } from 'path'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { createHash } from 'crypto'
 import { randomUUID } from 'crypto'
-import type { ScriptFile, ScriptVersion, RunLog, ErrorLog, ScriptStats, ScriptSuggestions } from '../../shared/types'
+import type { ScriptFile, ScriptVersion, RunLog, ErrorLog, ScriptStats, ScriptSuggestions, AnonLog, TableAccessLog, HistoryEntry } from '../../shared/types'
 
 interface ScriptsData {
   scripts: ScriptFile[]
   versions: ScriptVersion[]
   runLogs: RunLog[]
   errorLogs: ErrorLog[]
+  anonLogs: AnonLog[]
+  tableLogs: TableAccessLog[]
   _nextId: number
 }
 
@@ -19,13 +21,16 @@ function getStorePath(): string {
 
 function load(): ScriptsData {
   const path = getStorePath()
-  if (!existsSync(path)) {
-    return { scripts: [], versions: [], runLogs: [], errorLogs: [], _nextId: 1 }
-  }
+  const empty = (): ScriptsData => ({ scripts: [], versions: [], runLogs: [], errorLogs: [], anonLogs: [], tableLogs: [], _nextId: 1 })
+  if (!existsSync(path)) return empty()
   try {
-    return JSON.parse(readFileSync(path, 'utf-8')) as ScriptsData
+    const data = JSON.parse(readFileSync(path, 'utf-8')) as ScriptsData
+    // migrate older stores that lack new fields
+    if (!data.anonLogs) data.anonLogs = []
+    if (!data.tableLogs) data.tableLogs = []
+    return data
   } catch {
-    return { scripts: [], versions: [], runLogs: [], errorLogs: [], _nextId: 1 }
+    return empty()
   }
 }
 
@@ -94,11 +99,8 @@ export function saveVersion(scriptId: string, content: string): ScriptVersion {
   const data = load()
   const hash = hashContent(content)
 
-  const latest = data.versions
-    .filter((v) => v.scriptId === scriptId)
-    .sort((a, b) => b.createdAt - a.createdAt)[0]
-
-  if (latest?.hash === hash) return latest
+  const existing = data.versions.find((v) => v.scriptId === scriptId && v.hash === hash)
+  if (existing) return existing
 
   const version: ScriptVersion = {
     id: data._nextId++,
@@ -171,6 +173,7 @@ export function getStats(scriptId: string): ScriptStats {
 // ── Suggestions ───────────────────────────────────────────────────────────────
 
 export function getSuggestions(
+  connectionId: string | null,
   activeDb: string | null,
   activeTable: string | null,
   favouriteThreshold = 5
@@ -207,12 +210,12 @@ export function getSuggestions(
     .map((s) => ({ ...s, lastRunAt: statsMap.get(s.id)?.lastRunAt ?? 0 }))
 
   const contextual: ScriptFile[] = []
-  if (activeTable && activeDb) {
-    const tableScope = `table:${activeDb}.${activeTable}`
+  if (connectionId && activeTable && activeDb) {
+    const tableScope = `table:${connectionId}:${activeDb}.${activeTable}`
     contextual.push(...data.scripts.filter((s) => s.scope === tableScope))
   }
-  if (activeDb) {
-    const dbScope = `db:${activeDb}`
+  if (connectionId && activeDb) {
+    const dbScope = `db:${connectionId}:${activeDb}`
     contextual.push(...data.scripts.filter((s) => s.scope === dbScope && !contextual.find((c) => c.id === s.id)))
   }
 
@@ -225,6 +228,87 @@ export function getSuggestions(
     .slice(0, 5)
 
   return { favourites, recent, contextual, archiveCandidates }
+}
+
+// ── Anonymous run log ─────────────────────────────────────────────────────────
+
+export function logAnonRun(
+  sql: string,
+  connectionId: string | null,
+  durationMs: number,
+  rowCount: number | null
+): void {
+  const data = load()
+  data.anonLogs.push({
+    id: data._nextId++,
+    sql: sql.slice(0, 4000),
+    connectionId,
+    durationMs,
+    rowCount,
+    ranAt: Date.now()
+  })
+  // keep last 500 anon logs
+  if (data.anonLogs.length > 500) data.anonLogs = data.anonLogs.slice(-500)
+  save(data)
+}
+
+// ── Table access log ──────────────────────────────────────────────────────────
+
+export function logTableAccess(connectionId: string, dbName: string, tableName: string): void {
+  const data = load()
+  // remove previous entry for same table, then push to front (most recent)
+  data.tableLogs = data.tableLogs.filter(
+    (t) => !(t.connectionId === connectionId && t.dbName === dbName && t.tableName === tableName)
+  )
+  data.tableLogs.unshift({ connectionId, dbName, tableName, accessedAt: Date.now() })
+  if (data.tableLogs.length > 200) data.tableLogs = data.tableLogs.slice(0, 200)
+  save(data)
+}
+
+export function getRecentTables(connectionId: string, dbName: string, limit = 10): string[] {
+  const data = load()
+  return data.tableLogs
+    .filter((t) => t.connectionId === connectionId && t.dbName === dbName)
+    .slice(0, limit)
+    .map((t) => t.tableName)
+}
+
+// ── Unified history ───────────────────────────────────────────────────────────
+
+export function getHistory(limit = 200): HistoryEntry[] {
+  const data = load()
+  const scriptMap = new Map(data.scripts.map((s) => [s.id, s]))
+  const versionMap = new Map(data.versions.map((v) => [v.id, v]))
+
+  const scriptEntries: HistoryEntry[] = data.runLogs.map((r) => {
+    const script = scriptMap.get(r.scriptId)
+    const version = versionMap.get(r.versionId)
+    return {
+      id: `script:${r.id}`,
+      type: 'script',
+      scriptId: r.scriptId,
+      scriptName: script?.name ?? '(удалён)',
+      sqlPreview: version?.content.slice(0, 200) ?? '',
+      connectionId: r.connectionId,
+      durationMs: r.durationMs,
+      rowCount: r.rowCount,
+      ranAt: r.ranAt
+    }
+  })
+
+  const anonEntries: HistoryEntry[] = data.anonLogs.map((a) => ({
+    id: `anon:${a.id}`,
+    type: 'anon',
+    sqlPreview: a.sql.slice(0, 200),
+    connectionId: a.connectionId,
+    durationMs: a.durationMs,
+    rowCount: a.rowCount,
+    ranAt: a.ranAt
+  }))
+
+  return [...scriptEntries, ...anonEntries]
+    .sort((a, b) => b.ranAt - a.ranAt)
+    .slice(0, limit)
 }
 
 // ── Full-text search ──────────────────────────────────────────────────────────

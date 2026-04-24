@@ -6,6 +6,7 @@ export interface ConnectionConfig {
   user: string
   password: string
   database?: string
+  tag?: string
   createdAt: string
 }
 
@@ -18,6 +19,7 @@ export interface TestConnectionResult {
 export interface TableInfo {
   name: string
   tableType: 'BASE TABLE' | 'VIEW' | string
+  sizeBytes?: number
 }
 
 export interface ColumnInfo {
@@ -27,6 +29,8 @@ export interface ColumnInfo {
   key: string
   default: string | null
   extra: string
+  refTable?: string | null
+  indexName?: string | null
 }
 
 export interface QueryResult {
@@ -42,7 +46,7 @@ export interface QueryResult {
 export interface ScriptFile {
   id: string
   name: string
-  /** 'global' | 'db:<dbName>' | 'table:<db>.<table>' */
+  /** 'global' | 'db:<connectionId>:<dbName>' | 'table:<connectionId>:<dbName>.<table>' */
   scope: string
   createdAt: number
   updatedAt: number
@@ -86,4 +90,44 @@ export interface ScriptSuggestions {
   recent: Array<ScriptFile & { lastRunAt: number }>
   contextual: ScriptFile[]
   archiveCandidates: Array<ScriptFile & { lastRunAt: number | null }>
+}
+
+export interface QueryLogEntry {
+  id: number
+  sql: string
+  connectionId: string | null
+  database: string | null
+  durationMs: number | null
+  error: string | null
+  rowCount: number | null
+  ranAt: number
+  source: 'user' | 'system'
+}
+
+export interface AnonLog {
+  id: number
+  sql: string
+  connectionId: string | null
+  durationMs: number
+  rowCount: number | null
+  ranAt: number
+}
+
+export interface TableAccessLog {
+  connectionId: string
+  dbName: string
+  tableName: string
+  accessedAt: number
+}
+
+export interface HistoryEntry {
+  id: string
+  type: 'script' | 'anon'
+  scriptId?: string
+  scriptName?: string
+  sqlPreview: string
+  connectionId: string | null
+  durationMs: number
+  rowCount: number | null
+  ranAt: number
 }

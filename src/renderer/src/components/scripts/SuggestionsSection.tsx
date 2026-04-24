@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Star, Clock, LayoutGrid, Archive } from 'lucide-react'
+import { ChevronRight, Star, Clock, LayoutGrid, Archive } from 'lucide-react'
 import { useConnections } from '@renderer/context/ConnectionsContext'
 import type { ScriptFile, ScriptSuggestions } from '@shared/types'
 
@@ -9,140 +9,161 @@ interface Props {
 }
 
 export default function SuggestionsSection({ onOpenScript, activeTable }: Props) {
-  const { activeDatabase } = useConnections()
+  const { activeDatabase, activeConnectionId } = useConnections()
   const [suggestions, setSuggestions] = useState<ScriptSuggestions | null>(null)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    window.api.scripts.suggestions(activeDatabase, activeTable ?? null).then(setSuggestions)
-  }, [activeDatabase, activeTable])
+    window.api.scripts.suggestions(activeConnectionId, activeDatabase, activeTable ?? null).then(setSuggestions)
+  }, [activeConnectionId, activeDatabase, activeTable])
 
   if (!suggestions) return null
 
-  const hasAny =
-    suggestions.favourites.length > 0 ||
-    suggestions.recent.length > 0 ||
-    suggestions.contextual.length > 0 ||
-    suggestions.archiveCandidates.length > 0
-
+  const { favourites, recent, contextual } = suggestions
+  const hasAny = favourites.length > 0 || recent.length > 0 || contextual.length > 0
   if (!hasAny) return null
 
   function toggle(key: string) {
     setCollapsed((prev) => {
       const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
+      if (next.has(key)) next.delete(key); else next.add(key)
       return next
     })
   }
 
   return (
     <div className="border-b border-vs-border">
-      {suggestions.favourites.length > 0 && (
-        <Group
+      {favourites.length > 0 && (
+        <SectionGroup
           id="favourites"
           label="Избранные"
           icon={<Star size={11} className="text-[#ffd700]" />}
-          count={suggestions.favourites.length}
+          count={favourites.length}
           collapsed={collapsed.has('favourites')}
           onToggle={() => toggle('favourites')}
         >
-          {suggestions.favourites.map((s) => (
-            <SuggestionRow
-              key={s.id}
-              name={s.name}
-              meta={`${s.runCount} запусков`}
-              onClick={() => onOpenScript(s)}
-            />
+          {favourites.map((s) => (
+            <SuggestionRow key={s.id} name={s.name} meta={`${s.runCount} запусков`} onClick={() => onOpenScript(s)} />
           ))}
-        </Group>
+        </SectionGroup>
       )}
 
-      {suggestions.recent.length > 0 && (
-        <Group
+      {recent.length > 0 && (
+        <SectionGroup
           id="recent"
           label="Недавние"
           icon={<Clock size={11} className="text-[#4a9cd6]" />}
-          count={suggestions.recent.length}
+          count={recent.length}
           collapsed={collapsed.has('recent')}
           onToggle={() => toggle('recent')}
         >
-          {suggestions.recent.map((s) => (
-            <SuggestionRow
-              key={s.id}
-              name={s.name}
-              meta={relativeDate(s.lastRunAt)}
-              onClick={() => onOpenScript(s)}
-            />
+          {recent.map((s) => (
+            <SuggestionRow key={s.id} name={s.name} meta={relativeDate(s.lastRunAt)} onClick={() => onOpenScript(s)} />
           ))}
-        </Group>
+        </SectionGroup>
       )}
 
-      {suggestions.contextual.length > 0 && (
-        <Group
+      {contextual.length > 0 && (
+        <SectionGroup
           id="contextual"
           label={activeTable ? `Для таблицы: ${activeTable}` : `Для БД: ${activeDatabase}`}
           icon={<LayoutGrid size={11} className="text-[#4ec9b0]" />}
-          count={suggestions.contextual.length}
+          count={contextual.length}
           collapsed={collapsed.has('contextual')}
           onToggle={() => toggle('contextual')}
         >
-          {suggestions.contextual.map((s) => (
+          {contextual.map((s) => (
             <SuggestionRow key={s.id} name={s.name} onClick={() => onOpenScript(s)} />
           ))}
-        </Group>
-      )}
-
-      {suggestions.archiveCandidates.length > 0 && (
-        <Group
-          id="archive"
-          label="Архивировать?"
-          icon={<Archive size={11} className="text-vs-textDim" />}
-          count={suggestions.archiveCandidates.length}
-          collapsed={collapsed.has('archive')}
-          onToggle={() => toggle('archive')}
-        >
-          {suggestions.archiveCandidates.map((s) => (
-            <SuggestionRow
-              key={s.id}
-              name={s.name}
-              meta={s.lastRunAt ? `30+ дней назад` : 'никогда'}
-              muted
-              onClick={() => onOpenScript(s)}
-            />
-          ))}
-        </Group>
+        </SectionGroup>
       )}
     </div>
   )
 }
 
-function Group({
-  id, label, icon, count, collapsed, onToggle, children
+// ─── Archive section (rendered at the bottom of ScriptPanel) ───────────────
+
+interface ArchiveProps {
+  onOpenScript: (script: ScriptFile) => void
+  activeTable?: string | null
+}
+
+export function ArchiveSection({ onOpenScript, activeTable }: ArchiveProps) {
+  const { activeDatabase, activeConnectionId } = useConnections()
+  const [candidates, setCandidates] = useState<(ScriptFile & { lastRunAt: number | null })[]>([])
+  const [collapsed, setCollapsed] = useState(false)
+
+  useEffect(() => {
+    window.api.scripts.suggestions(activeConnectionId, activeDatabase, activeTable ?? null).then((s) => {
+      setCandidates(s.archiveCandidates)
+    })
+  }, [activeConnectionId, activeDatabase, activeTable])
+
+  if (candidates.length === 0) return null
+
+  return (
+    <SectionGroup
+      id="archive"
+      label="Архивировать?"
+      icon={<Archive size={11} className="text-vs-textDim" />}
+      count={candidates.length}
+      collapsed={collapsed}
+      onToggle={() => setCollapsed(!collapsed)}
+    >
+      {candidates.map((s) => (
+        <SuggestionRow
+          key={s.id}
+          name={s.name}
+          meta={s.lastRunAt ? `30+ дней назад` : 'никогда'}
+          muted
+          onClick={() => onOpenScript(s)}
+        />
+      ))}
+    </SectionGroup>
+  )
+}
+
+// ─── Shared section group ──────────────────────────────────────────────────
+
+export function SectionGroup({
+  label, icon, count, collapsed, onToggle, children, indent = 0, dimmed = false
 }: {
-  id: string
   label: string
-  icon: React.ReactNode
-  count: number
+  icon?: React.ReactNode
+  count?: number
   collapsed: boolean
   onToggle: () => void
   children: React.ReactNode
+  id?: string
+  indent?: number
+  dimmed?: boolean
 }) {
+  const paddingLeft = indent > 0 ? `${indent * 12 + 8}px` : undefined
   return (
     <div>
       <div
-        className="flex items-center gap-1.5 px-3 py-1 cursor-pointer hover:bg-vs-hover select-none"
+        style={paddingLeft ? { paddingLeft } : undefined}
+        className={`flex items-center h-[22px] gap-1 cursor-pointer select-none hover:bg-vs-hover bg-vs-panelHeader ${!paddingLeft ? 'px-2' : ''} ${dimmed ? 'opacity-60' : ''}`}
         onClick={onToggle}
       >
-        <span className="text-vs-textDim text-[10px]">{collapsed ? '▸' : '▾'}</span>
-        {icon}
-        <span className="text-xs text-vs-textDim font-semibold flex-1 truncate">{label}</span>
-        <span className="text-xs text-vs-textDim">{count}</span>
+        <ChevronRight
+          size={12}
+          className={`text-vs-textDim shrink-0 transition-transform duration-100 ${!collapsed ? 'rotate-90' : ''}`}
+        />
+        {icon && <span className="shrink-0">{icon}</span>}
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-vs-textDim flex-1 truncate ml-0.5">
+          {label}
+        </span>
+        {count !== undefined && (
+          <span className="text-[11px] text-vs-textDim pr-1">{count}</span>
+        )}
       </div>
       {!collapsed && <div>{children}</div>}
     </div>
   )
 }
+
+// ─── Shared row ────────────────────────────────────────────────────────────
 
 function SuggestionRow({
   name, meta, muted, onClick
@@ -164,6 +185,5 @@ function relativeDate(ts: number): string {
   if (mins < 60) return `${mins} мин назад`
   const hours = Math.floor(diff / 3600000)
   if (hours < 24) return `${hours} ч назад`
-  const days = Math.floor(diff / 86400000)
-  return `${days} дн назад`
+  return `${Math.floor(diff / 86400000)} дн назад`
 }

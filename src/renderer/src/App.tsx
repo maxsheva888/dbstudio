@@ -1,25 +1,29 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels'
 import { ConnectionsProvider } from './context/ConnectionsContext'
 import { ScriptsProvider } from './context/ScriptsContext'
 import { SettingsProvider } from './context/SettingsContext'
 import ActivityBar from './components/layout/ActivityBar'
 import Sidebar from './components/layout/Sidebar'
+import ScriptsBar from './components/layout/ScriptsBar'
 import EditorArea from './components/layout/EditorArea'
 import StatusBar from './components/layout/StatusBar'
 import CommandPalette from './components/layout/CommandPalette'
+import type { ActivityPanel } from './components/layout/ActivityBar'
 import type { ScriptFile } from '@shared/types'
 
-type Panel = 'connections' | 'scripts' | 'history'
-
 export default function App() {
-  const [activePanel, setActivePanel] = useState<Panel>('connections')
+  const [activePanel, setActivePanel] = useState<ActivityPanel>('connections')
   const [pendingSql, setPendingSql] = useState<string | undefined>()
   const [scriptToOpen, setScriptToOpen] = useState<ScriptFile | undefined>()
   const [lastQueryMs, setLastQueryMs] = useState<number | null>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [newTabTrigger, setNewTabTrigger] = useState(0)
+  const [activeTable, setActiveTable] = useState<string | null>(null)
+  const [pendingRunSql, setPendingRunSql] = useState<string | undefined>()
+  const [scriptToRun, setScriptToRun] = useState<ScriptFile | undefined>()
+  const [openLogTrigger, setOpenLogTrigger] = useState(0)
 
-  // Global Ctrl+Shift+P listener
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'P' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
@@ -32,15 +36,11 @@ export default function App() {
   }, [])
 
   function handleTableSelect(database: string, table: string) {
+    setActiveTable(table)
     setPendingSql(`SELECT *\nFROM \`${database}\`.\`${table}\`\nLIMIT 100;`)
   }
 
-  function handleOpenScript(script: ScriptFile) {
-    setScriptToOpen(script)
-    setActivePanel('connections') // keep sidebar visible
-  }
-
-  const handlePaletteOpenScript = useCallback((script: ScriptFile) => {
+  const handleOpenScript = useCallback((script: ScriptFile) => {
     setScriptToOpen(script)
   }, [])
 
@@ -49,22 +49,41 @@ export default function App() {
       <ConnectionsProvider>
         <ScriptsProvider>
           <div className="flex flex-col h-screen overflow-hidden bg-vs-bg text-vs-text">
-            <div className="flex flex-1 overflow-hidden">
-              <ActivityBar activePanel={activePanel} onPanelChange={setActivePanel} />
-              <Sidebar
-                activePanel={activePanel}
-                onTableSelect={handleTableSelect}
-                onOpenScript={handleOpenScript}
-              />
-              <EditorArea
-                initialSql={pendingSql}
-                onInitialSqlConsumed={() => setPendingSql(undefined)}
-                scriptToOpen={scriptToOpen}
-                onScriptOpened={() => setScriptToOpen(undefined)}
-                onLastQueryMs={setLastQueryMs}
-                onOpenPalette={() => setPaletteOpen(true)}
-                newTabTrigger={newTabTrigger}
-              />
+            <div className="flex flex-1 overflow-hidden min-h-0">
+              <ActivityBar activePanel={activePanel} onPanelChange={setActivePanel} onOpenLog={() => setOpenLogTrigger((n) => n + 1)} />
+              <PanelGroup direction="horizontal" autoSaveId="dbstudio-layout" className="flex-1 min-w-0">
+                <Panel id="left-sidebar" defaultSize={20} minSize={10} maxSize={40}>
+                  <Sidebar
+                    activePanel={activePanel}
+                    onTableSelect={handleTableSelect}
+                    onOpenScript={handleOpenScript}
+                    onRunScript={(script) => setScriptToRun(script)}
+                    onOpenSql={(sql) => setPendingSql(sql)}
+                    onRunSql={(sql) => setPendingRunSql(sql)}
+                  />
+                </Panel>
+                <PanelResizeHandle className="w-[3px] bg-vs-border hover:bg-vs-statusBar transition-colors cursor-col-resize shrink-0" />
+                <Panel id="editor" minSize={30}>
+                  <EditorArea
+                    initialSql={pendingSql}
+                    onInitialSqlConsumed={() => setPendingSql(undefined)}
+                    runSql={pendingRunSql}
+                    onRunSqlConsumed={() => setPendingRunSql(undefined)}
+                    scriptToOpen={scriptToOpen}
+                    onScriptOpened={() => setScriptToOpen(undefined)}
+                    scriptToRun={scriptToRun}
+                    onScriptRun={() => setScriptToRun(undefined)}
+                    onLastQueryMs={setLastQueryMs}
+                    onOpenPalette={() => setPaletteOpen(true)}
+                    newTabTrigger={newTabTrigger}
+                    openLogTrigger={openLogTrigger}
+                  />
+                </Panel>
+                <PanelResizeHandle className="w-[3px] bg-vs-border hover:bg-vs-statusBar transition-colors cursor-col-resize shrink-0" />
+                <Panel id="right-sidebar" defaultSize={17} minSize={10} maxSize={40}>
+                  <ScriptsBar onOpenScript={handleOpenScript} activeTable={activeTable} />
+                </Panel>
+              </PanelGroup>
             </div>
             <StatusBar lastQueryMs={lastQueryMs} />
           </div>
@@ -72,8 +91,8 @@ export default function App() {
           {paletteOpen && (
             <CommandPalette
               onClose={() => setPaletteOpen(false)}
-              onOpenScript={handlePaletteOpenScript}
-              onNewTab={() => { setNewTabTrigger((n) => n + 1) }}
+              onOpenScript={handleOpenScript}
+              onNewTab={() => setNewTabTrigger((n) => n + 1)}
             />
           )}
         </ScriptsProvider>

@@ -2,7 +2,7 @@
 import type {
   ConnectionConfig, TestConnectionResult,
   TableInfo, ColumnInfo, QueryResult,
-  ScriptFile, ScriptVersion, ScriptStats, ScriptSuggestions
+  ScriptFile, ScriptVersion, ScriptStats, ScriptSuggestions, HistoryEntry, QueryLogEntry
 } from '@shared/types'
 
 declare global {
@@ -17,11 +17,17 @@ declare global {
       schema: {
         connect: (connectionId: string) => Promise<string[]>
         disconnect: (connectionId: string) => Promise<void>
+        listConnected: () => Promise<string[]>
         tables: (connectionId: string, database: string) => Promise<TableInfo[]>
         columns: (connectionId: string, database: string, table: string) => Promise<ColumnInfo[]>
+        dbSizes: (connectionId: string) => Promise<Record<string, number>>
       }
       query: {
         execute: (connectionId: string, database: string | null, sql: string) => Promise<QueryResult>
+      }
+      queryLog: {
+        get: () => Promise<QueryLogEntry[]>
+        onEntry: (cb: (entry: QueryLogEntry) => void) => (() => void)
       }
       scripts: {
         list: () => Promise<ScriptFile[]>
@@ -34,8 +40,12 @@ declare global {
         logRun: (scriptId: string, versionId: number, connectionId: string, durationMs: number, rowCount: number) => Promise<void>
         logError: (scriptId: string, contentHash: string, errorMessage: string, connectionId: string | null) => Promise<void>
         stats: (scriptId: string) => Promise<ScriptStats>
-        suggestions: (activeDb: string | null, activeTable: string | null, threshold?: number) => Promise<ScriptSuggestions>
+        suggestions: (connectionId: string | null, activeDb: string | null, activeTable: string | null, threshold?: number) => Promise<ScriptSuggestions>
         search: (query: string) => Promise<ScriptFile[]>
+        logAnonRun: (sql: string, connectionId: string | null, durationMs: number, rowCount: number | null) => Promise<void>
+        logTableAccess: (connectionId: string, dbName: string, tableName: string) => Promise<void>
+        recentTables: (connectionId: string, dbName: string, limit?: number) => Promise<string[]>
+        history: (limit?: number) => Promise<HistoryEntry[]>
       }
     }
   }

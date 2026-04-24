@@ -1,6 +1,7 @@
 import React from 'react'
 import { Wifi, WifiOff, Database } from 'lucide-react'
 import { useConnections } from '@renderer/context/ConnectionsContext'
+import { getTagByKey } from '@renderer/constants/connectionTags'
 
 interface Props {
   lastQueryMs?: number | null
@@ -9,9 +10,13 @@ interface Props {
 export default function StatusBar({ lastQueryMs }: Props) {
   const { connections, activeConnectionId, activeDatabase } = useConnections()
   const active = connections.find((c) => c.id === activeConnectionId)
+  const tag = active ? getTagByKey(active.tag) : undefined
 
   return (
-    <div className="flex items-center justify-between px-3 h-6 bg-vs-statusBar text-white shrink-0 text-xs">
+    <div
+      className="flex items-center justify-between px-3 h-6 text-white shrink-0 text-xs transition-colors duration-300"
+      style={{ backgroundColor: tag ? tag.color : 'var(--vs-status-bar)' }}
+    >
       <div className="flex items-center gap-3">
         {active ? (
           <>
@@ -26,7 +31,7 @@ export default function StatusBar({ lastQueryMs }: Props) {
               </span>
             )}
             {lastQueryMs != null && (
-              <span className="opacity-80">{lastQueryMs} мс</span>
+              <span className="opacity-80" title="Время выполнения последнего запроса">Запрос: {lastQueryMs} мс</span>
             )}
           </>
         ) : (

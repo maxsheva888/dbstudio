@@ -1,9 +1,10 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, shell, ipcMain } from 'electron'
 import { join } from 'path'
 import { registerConnectionHandlers } from './ipc/connections'
 import { registerSchemaHandlers } from './ipc/schema'
 import { registerQueryHandlers } from './ipc/query'
 import { registerScriptsHandlers } from './ipc/scripts'
+import { setPushFn, getEntries } from './queryLog'
 
 const isDev = process.env.NODE_ENV !== 'production'
 
@@ -26,6 +27,9 @@ function createWindow(): void {
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
     if (isDev) mainWindow.webContents.openDevTools({ mode: 'detach' })
+    setPushFn((entry) => {
+      if (!mainWindow.isDestroyed()) mainWindow.webContents.send('queryLog:entry', entry)
+    })
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -43,6 +47,8 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   if (process.platform === 'win32') app.setAppUserModelId('com.dbstudio')
+
+  ipcMain.handle('queryLog:get', () => getEntries())
 
   registerConnectionHandlers()
   registerSchemaHandlers()

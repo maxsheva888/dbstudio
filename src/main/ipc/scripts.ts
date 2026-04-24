@@ -3,7 +3,8 @@ import {
   listScripts, createScript, renameScript, deleteScript,
   listVersions, getVersion, saveVersion,
   logRun, logError, getStats,
-  getSuggestions, searchScripts
+  getSuggestions, searchScripts,
+  logAnonRun, logTableAccess, getRecentTables, getHistory
 } from '../scripts/store'
 
 export function registerScriptsHandlers(): void {
@@ -60,12 +61,37 @@ export function registerScriptsHandlers(): void {
 
   ipcMain.handle('scripts:suggestions', (
     _e,
+    connectionId: string | null,
     activeDb: string | null,
     activeTable: string | null,
     threshold?: number
-  ) => getSuggestions(activeDb, activeTable, threshold))
+  ) => getSuggestions(connectionId, activeDb, activeTable, threshold))
 
   ipcMain.handle('scripts:search', (_e, query: string) =>
     searchScripts(query)
   )
+
+  ipcMain.handle('scripts:logAnonRun', (
+    _e,
+    sql: string,
+    connectionId: string | null,
+    durationMs: number,
+    rowCount: number | null
+  ) => logAnonRun(sql, connectionId, durationMs, rowCount))
+
+  ipcMain.handle('scripts:logTableAccess', (
+    _e,
+    connectionId: string,
+    dbName: string,
+    tableName: string
+  ) => logTableAccess(connectionId, dbName, tableName))
+
+  ipcMain.handle('scripts:recentTables', (
+    _e,
+    connectionId: string,
+    dbName: string,
+    limit?: number
+  ) => getRecentTables(connectionId, dbName, limit))
+
+  ipcMain.handle('scripts:history', (_e, limit?: number) => getHistory(limit))
 }

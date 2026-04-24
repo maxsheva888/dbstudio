@@ -26,7 +26,7 @@ export function getPool(connectionId: string, database?: string): mysql.Pool {
   if (!entry) throw new Error(`No active connection: ${connectionId}`)
   const key = database ?? '__no_db__'
   if (!entry.pools.has(key)) {
-    entry.pools.set(key, mysql.createPool({
+    const pool = mysql.createPool({
       host: entry.config.host,
       port: entry.config.port,
       user: entry.config.user,
@@ -34,11 +34,16 @@ export function getPool(connectionId: string, database?: string): mysql.Pool {
       database: database || undefined,
       connectionLimit: 5,
       timezone: 'local'
-    }))
+    })
+    entry.pools.set(key, pool)
   }
   return entry.pools.get(key)!
 }
 
 export function isConnected(id: string): boolean {
   return registry.has(id)
+}
+
+export function listConnectedIds(): string[] {
+  return Array.from(registry.keys())
 }

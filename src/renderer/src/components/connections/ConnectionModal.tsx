@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { X, Loader2, CheckCircle2, XCircle } from 'lucide-react'
 import type { ConnectionConfig } from '@shared/types'
+import { CONNECTION_TAGS } from '@renderer/constants/connectionTags'
 
 interface Props {
   initial?: ConnectionConfig
@@ -14,7 +15,8 @@ const EMPTY: Omit<ConnectionConfig, 'id' | 'createdAt'> = {
   port: 3306,
   user: 'root',
   password: '',
-  database: ''
+  database: '',
+  tag: undefined
 }
 
 type TestState = 'idle' | 'loading' | 'ok' | 'error'
@@ -85,6 +87,42 @@ export default function ConnectionModal({ initial, onSave, onClose }: Props) {
             <input type="text" placeholder="(необязательно)" value={form.database ?? ''}
               onChange={(e) => set('database', e.target.value)} />
           </Field>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-vs-textDim">Тег среды</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => set('tag', undefined)}
+                className={`px-3 py-1 text-xs rounded border transition-colors ${
+                  !form.tag
+                    ? 'border-vs-statusBar text-vs-text bg-vs-input'
+                    : 'border-vs-border text-vs-textDim hover:border-vs-textDim'
+                }`}
+              >
+                Нет
+              </button>
+              {CONNECTION_TAGS.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => set('tag', t.key)}
+                  className={`px-3 py-1 text-xs rounded border transition-all flex items-center gap-1.5 ${
+                    form.tag === t.key
+                      ? 'border-transparent text-white'
+                      : 'border-vs-border text-vs-textDim hover:border-vs-textDim'
+                  }`}
+                  style={form.tag === t.key ? { backgroundColor: t.color } : undefined}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: t.color }}
+                  />
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {testState !== 'idle' && (
             <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded ${

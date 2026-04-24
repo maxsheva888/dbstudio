@@ -1,21 +1,21 @@
 import React, { useState } from 'react'
-import { Server, FileCode, History, Settings } from 'lucide-react'
+import { Server, History, ScrollText, Settings } from 'lucide-react'
 import SettingsModal from './SettingsModal'
 
-type Panel = 'connections' | 'scripts' | 'history'
+type Panel = 'connections' | 'history'
 
 interface Props {
   activePanel: Panel
   onPanelChange: (panel: Panel) => void
+  onOpenLog: () => void
 }
 
 const items: { id: Panel; icon: React.ReactNode; label: string }[] = [
   { id: 'connections', icon: <Server size={24} />, label: 'Подключения' },
-  { id: 'scripts',     icon: <FileCode size={24} />, label: 'Скрипты' },
   { id: 'history',     icon: <History size={24} />, label: 'История' }
 ]
 
-export default function ActivityBar({ activePanel, onPanelChange }: Props) {
+export default function ActivityBar({ activePanel, onPanelChange, onOpenLog }: Props) {
   const [showSettings, setShowSettings] = useState(false)
 
   return (
@@ -40,8 +40,13 @@ export default function ActivityBar({ activePanel, onPanelChange }: Props) {
             </button>
           ))}
         </div>
-
-        {/* Settings at bottom */}
+        <button
+          title="Лог запросов"
+          onClick={onOpenLog}
+          className="flex items-center justify-center w-12 h-12 text-vs-textDim hover:text-vs-text transition-colors"
+        >
+          <ScrollText size={22} />
+        </button>
         <button
           title="Настройки"
           onClick={() => setShowSettings(true)}
@@ -55,3 +60,5 @@ export default function ActivityBar({ activePanel, onPanelChange }: Props) {
     </>
   )
 }
+
+export type { Panel as ActivityPanel }
