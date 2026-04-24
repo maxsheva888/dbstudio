@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import Editor, { DiffEditor, type OnMount } from '@monaco-editor/react'
-import { X, Play, Save, Eye, GitBranch } from 'lucide-react'
+import { X, Play, Save, Eye, GitBranch, ShieldCheck, ShieldOff, Pencil } from 'lucide-react'
 import { useConnections } from '@renderer/context/ConnectionsContext'
 import { useScripts } from '@renderer/context/ScriptsContext'
 import { useSettings } from '@renderer/context/SettingsContext'
@@ -154,6 +154,43 @@ function isScopeExecutable(
   return true
 }
 
+// ── SQL write-op detection ────────────────────────────────────────────────────
+
+const WRITE_OP_RE = /^\s*(INSERT|UPDATE|DELETE|REPLACE|DROP|TRUNCATE|ALTER|CREATE|RENAME|CALL|EXECUTE|GRANT|REVOKE|LOCK|UNLOCK)\b/i
+
+function detectWriteOp(sql: string): string | null {
+  const stripped = sql.replace(/--[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
+  for (const stmt of stripped.split(';').map((s) => s.trim()).filter(Boolean)) {
+    const m = stmt.match(WRITE_OP_RE)
+    if (m) return m[1].toUpperCase()
+  }
+  return null
+}
+
+// ── Editable-table helpers ────────────────────────────────────────────────────
+
+function parseEditableTable(sql: string): string | null {
+  const s = sql.replace(/--[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '').trim()
+  const stmts = s.split(';').map((t) => t.trim()).filter(Boolean)
+  if (stmts.length !== 1) return null
+  const stmt = stmts[0]
+  if (!/^SELECT\b/i.test(stmt)) return null
+  if (/\b(JOIN|UNION)\b|\bGROUP\s+BY\b|\bHAVING\b|\(\s*SELECT\b/i.test(stmt)) return null
+  const m = stmt.match(/\bFROM\s+`?(\w+)`?/i)
+  return m ? m[1] : null
+}
+
+function sqlLiteral(val: unknown): string {
+  if (val === null || val === undefined) return 'NULL'
+  if (typeof val === 'boolean') return val ? '1' : '0'
+  if (typeof val === 'number' || typeof val === 'bigint') return String(val)
+  if (val instanceof Date) {
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `'${val.getFullYear()}-${pad(val.getMonth() + 1)}-${pad(val.getDate())} ${pad(val.getHours())}:${pad(val.getMinutes())}:${pad(val.getSeconds())}'`
+  }
+  return `'${String(val).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`
+}
+
 // ── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -183,7 +220,7 @@ export default function EditorArea({
 }: Props) {
   const { activeConnectionId, activeDatabases, activeDatabase, setActiveDatabase } = useConnections()
   const { createScript } = useScripts()
-  const { monacoTheme, editorFontSize } = useSettings()
+  const { monacoTheme, editorFontSize, safeMode, setSafeMode } = useSettings()
   const [tabs, setTabs] = useState<Tab[]>(() => {
     const saved = loadPersistedTabs()
     return saved?.tabs ?? [{ id: '1', title: 'Query 1', content: DEFAULT_SQL }]
@@ -198,6 +235,11 @@ export default function EditorArea({
   const [tabMeta, setTabMeta] = useState<Record<string, TabMeta>>({})
   const [bottomTab, setBottomTab] = useState<'results' | 'versions'>('results')
   const [showSaveModal, setShowSaveModal] = useState(false)
+  const [blockedOp, setBlockedOp] = useState<string | null>(null)
+  const [editMode, setEditMode] = useState(false)
+  const [editableTable, setEditableTable] = useState<string | null>(null)
+  const [pkCols, setPkCols] = useState<string[]>([])
+  const [pendingEdits, setPendingEdits] = useState<Map<number, Record<string, unknown>>>(new Map())
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null)
   const saveTabsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -363,6 +405,15 @@ export default function EditorArea({
     setBottomTab('results')
   }, [newTabTrigger])
 
+  // ── Reset edit state on tab switch ───────────────────────────────────────
+
+  useEffect(() => {
+    setEditMode(false)
+    setPendingEdits(new Map())
+    setEditableTable(null)
+    setPkCols([])
+  }, [activeTabId])
+
   // ── Open log tab ──────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -392,7 +443,8 @@ export default function EditorArea({
 
   const executeQuery = useCallback(async (
     sqlOverride?: string,
-    tabContext?: { tabId: string; tab: Tab }
+    tabContext?: { tabId: string; tab: Tab },
+    bypassSafeMode = false
   ) => {
     const tabId = tabContext?.tabId ?? activeTabId
     const tabSnap = tabContext?.tab ?? activeTab
@@ -412,6 +464,12 @@ export default function EditorArea({
       }
     }
 
+    // Safe mode check — runs after sql is fully determined
+    if (safeMode && !bypassSafeMode) {
+      const op = detectWriteOp(sql)
+      if (op) { setBlockedOp(op); return }
+    }
+
     setTabResults((prev) => ({ ...prev, [tabId]: { loading: true } }))
     setBottomTab('results')
 
@@ -419,6 +477,12 @@ export default function EditorArea({
       const result = await window.api.query.execute(activeConnectionId, activeDatabase, sql.trim())
       setTabResults((prev) => ({ ...prev, [tabId]: { loading: false, result } }))
       onLastQueryMs?.(result.durationMs)
+      if (tabId === activeTabId) {
+        setEditableTable(result.columns.length > 0 ? parseEditableTable(sql) : null)
+        setEditMode(false)
+        setPendingEdits(new Map())
+        setPkCols([])
+      }
 
       if (tabSnap.scriptId) {
         const version = await window.api.scripts.saveVersion(tabSnap.scriptId, sqlOverride ?? tabSnap.content)
@@ -474,6 +538,68 @@ export default function EditorArea({
     ))
     await executeQuery(version.content)
   }
+
+  // ── Edit mode ─────────────────────────────────────────────────────────────
+
+  const handleEnableEditMode = useCallback(async () => {
+    if (!editableTable || !activeConnectionId || !activeDatabase) return
+    setEditMode(true)
+    const cols = await window.api.schema.columns(activeConnectionId, activeDatabase, editableTable)
+    setPkCols(cols.filter((c) => c.key === 'PRI').map((c) => c.name))
+  }, [editableTable, activeConnectionId, activeDatabase])
+
+  const handleCellChange = useCallback((rowIdx: number, col: string, value: string | null) => {
+    setPendingEdits((prev) => {
+      const next = new Map(prev)
+      next.set(rowIdx, { ...(next.get(rowIdx) ?? {}), [col]: value })
+      return next
+    })
+  }, [])
+
+  const executeApply = useCallback(async () => {
+    if (!activeConnectionId || !editableTable || !activeResult?.result) return
+    const rows = activeResult.result.rows
+    const sqls: string[] = []
+
+    for (const [rowIdx, edits] of pendingEdits.entries()) {
+      if (Object.keys(edits).length === 0) continue
+      const originalRow = rows[rowIdx]
+      if (!originalRow) continue
+
+      const setClause = Object.entries(edits)
+        .map(([col, val]) => `\`${col}\` = ${sqlLiteral(val)}`)
+        .join(', ')
+
+      let whereClause: string
+      if (pkCols.length > 0) {
+        whereClause = pkCols
+          .map((pk) => `\`${pk}\` = ${sqlLiteral(originalRow[pk])}`)
+          .join(' AND ')
+      } else {
+        const conditions = Object.entries(originalRow)
+          .filter(([, v]) => v !== null && v !== undefined)
+          .map(([col, v]) => `\`${col}\` = ${sqlLiteral(v)}`)
+          .join(' AND ')
+        whereClause = conditions || '1=0'
+      }
+
+      sqls.push(`UPDATE \`${editableTable}\` SET ${setClause} WHERE ${whereClause} LIMIT 1`)
+    }
+    if (sqls.length === 0) return
+
+    setTabResults((prev) => ({ ...prev, [activeTabId]: { loading: true } }))
+    try {
+      for (const sql of sqls) {
+        await window.api.query.execute(activeConnectionId, activeDatabase, sql)
+      }
+      setPendingEdits(new Map())
+      setEditMode(false)
+      await executeQuery()
+    } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : String(e)
+      setTabResults((prev) => ({ ...prev, [activeTabId]: { loading: false, error: errorMsg } }))
+    }
+  }, [activeConnectionId, activeDatabase, activeResult, activeTabId, editableTable, pkCols, pendingEdits, executeQuery])
 
   // ── Open diff tab ─────────────────────────────────────────────────────────
 
@@ -647,6 +773,21 @@ export default function EditorArea({
         {!activeConnectionId && (
           <span className="text-xs text-vs-textDim">Нет активного подключения</span>
         )}
+
+        <button
+          onClick={() => setSafeMode(!safeMode)}
+          title={safeMode ? 'Защита включена — только SELECT. Нажмите чтобы разрешить изменения' : 'Защита отключена — изменения разрешены. Нажмите чтобы включить защиту'}
+          className={`ml-auto flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
+            safeMode
+              ? 'text-[#4ec9b0] hover:bg-vs-hover'
+              : 'text-[#f48771] bg-[#f48771]/10 hover:bg-[#f48771]/20'
+          }`}
+        >
+          {safeMode
+            ? <><ShieldCheck size={14} /><span className="hidden sm:inline">Защита</span></>
+            : <><ShieldOff size={14} /><span className="hidden sm:inline">Без защиты</span></>
+          }
+        </button>
       </div>
 
       {/* Script info header */}
@@ -719,10 +860,53 @@ export default function EditorArea({
               {activeTab?.scriptId && (
                 <TabBtn active={bottomTab === 'versions'} onClick={() => setBottomTab('versions')}>Версии</TabBtn>
               )}
+              {editableTable && activeResult?.result && !activeResult.loading && bottomTab === 'results' && (
+                <button
+                  onClick={editMode
+                    ? () => { setEditMode(false); setPendingEdits(new Map()) }
+                    : handleEnableEditMode
+                  }
+                  className={`ml-auto mr-2 flex items-center gap-1 px-2 py-0.5 text-xs rounded transition-colors ${
+                    editMode
+                      ? 'text-[#e6db74] bg-[#e6db74]/10 hover:bg-[#e6db74]/20'
+                      : 'text-vs-textDim hover:text-vs-text hover:bg-vs-hover'
+                  }`}
+                >
+                  <Pencil size={11} />
+                  {editMode ? 'Редактирование' : 'Редактировать'}
+                </button>
+              )}
             </div>
+            {editMode && pendingEdits.size > 0 && (
+              <div className="flex items-center gap-3 px-3 py-1 bg-[#1e3a1e] border-b border-[#3a6b1e] shrink-0 text-xs">
+                <span className="text-[#a8cc8c]">
+                  {pendingEdits.size} {pendingEdits.size === 1 ? 'строка изменена' : 'строк изменено'}
+                </span>
+                <button
+                  onClick={executeApply}
+                  className="px-3 py-0.5 bg-[#3a6b1e] hover:bg-[#4a7c2f] text-[#a8cc8c] rounded transition-colors border border-[#4a7c2f]"
+                >
+                  Применить
+                </button>
+                <button
+                  onClick={() => { setPendingEdits(new Map()); setEditMode(false) }}
+                  className="px-3 py-0.5 text-vs-textDim hover:text-vs-text hover:bg-vs-hover rounded transition-colors"
+                >
+                  Отменить
+                </button>
+              </div>
+            )}
             <div className="flex-1 overflow-hidden">
               {bottomTab === 'results' && (
-                <ResultsGrid result={activeResult?.result} error={activeResult?.error} loading={activeResult?.loading} />
+                <ResultsGrid
+                  result={activeResult?.result}
+                  error={activeResult?.error}
+                  loading={activeResult?.loading}
+                  editMode={editMode}
+                  pkCols={pkCols}
+                  pendingEdits={pendingEdits}
+                  onCellChange={handleCellChange}
+                />
               )}
               {bottomTab === 'versions' && activeTab?.scriptId && (
                 <VersionsPanel
@@ -738,6 +922,40 @@ export default function EditorArea({
           </div>
         </Panel>
       </PanelGroup>
+
+      {blockedOp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-vs-sidebar border border-vs-border rounded-lg shadow-xl w-[420px] p-6 flex flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <ShieldCheck size={22} className="text-[#4ec9b0] shrink-0" />
+              <span className="text-vs-text font-semibold">Защита от изменений</span>
+            </div>
+            <p className="text-sm text-vs-textDim leading-relaxed">
+              Запрос содержит операцию{' '}
+              <span className="font-mono text-[#f48771] font-bold">{blockedOp}</span>,
+              которая изменяет данные. Выполнить этот запрос?
+            </p>
+            <p className="text-xs text-vs-textDim opacity-60">
+              Защита останется включённой для следующих запросов.
+              Отключить глобально можно кнопкой щита в тулбаре.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setBlockedOp(null)}
+                className="px-4 py-1.5 text-sm text-vs-textDim hover:text-vs-text hover:bg-vs-hover rounded transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => { setBlockedOp(null); executeQuery(undefined, undefined, true) }}
+                className="px-4 py-1.5 text-sm bg-[#f48771]/20 hover:bg-[#f48771]/30 text-[#f48771] rounded transition-colors border border-[#f48771]/40"
+              >
+                Выполнить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showSaveModal && (
         <NewScriptModal

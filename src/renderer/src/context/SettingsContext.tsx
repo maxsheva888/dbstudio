@@ -5,15 +5,17 @@ export type Theme = 'dark' | 'light'
 interface Settings {
   theme: Theme
   editorFontSize: number
+  safeMode: boolean
 }
 
 interface SettingsContextValue extends Settings {
   setTheme: (t: Theme) => void
   setEditorFontSize: (n: number) => void
+  setSafeMode: (v: boolean) => void
   monacoTheme: string
 }
 
-const DEFAULTS: Settings = { theme: 'dark', editorFontSize: 14 }
+const DEFAULTS: Settings = { theme: 'dark', editorFontSize: 14, safeMode: true }
 
 function load(): Settings {
   try {
@@ -50,12 +52,17 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setSettings((s) => ({ ...s, editorFontSize }))
   }, [])
 
+  const setSafeMode = useCallback((safeMode: boolean) => {
+    setSettings((s) => ({ ...s, safeMode }))
+  }, [])
+
   return (
     <SettingsContext.Provider value={{
       ...settings,
       monacoTheme: settings.theme === 'light' ? 'vs' : 'vs-dark',
       setTheme,
-      setEditorFontSize
+      setEditorFontSize,
+      setSafeMode
     }}>
       {children}
     </SettingsContext.Provider>

@@ -6,6 +6,10 @@ interface Props {
   result?: QueryResult
   error?: string
   loading?: boolean
+  editMode?: boolean
+  pkCols?: string[]
+  pendingEdits?: Map<number, Record<string, unknown>>
+  onCellChange?: (rowIdx: number, col: string, value: string | null) => void
 }
 
 // ─── type helpers ──────────────────────────────────────────────────────────
@@ -233,9 +237,174 @@ function CellModal({ cell, onClose }: { cell: CellInfo; onClose: () => void }) {
   )
 }
 
+// ─── JSON edit modal ──────────────────────────────────────────────────────
+
+function JsonEditModal({
+  column, initialValue, onSave, onClose
+}: {
+  column: string
+  initialValue: unknown
+  onSave: (value: string | null) => void
+  onClose: () => void
+}) {
+  function toText(v: unknown): string {
+    if (v == null) return ''
+    if (typeof v === 'string') { try { return JSON.stringify(JSON.parse(v), null, 2) } catch { return v } }
+    return JSON.stringify(v, null, 2)
+  }
+
+  const [text, setText] = useState(() => toText(initialValue))
+  const [jsonError, setJsonError] = useState<string | null>(null)
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    textareaRef.current?.focus()
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  function handleSave() {
+    const trimmed = text.trim()
+    if (trimmed === '') { onSave(null); return }
+    try { JSON.parse(trimmed) } catch { setJsonError('Невалидный JSON'); return }
+    onSave(trimmed)
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="flex flex-col bg-vs-sidebar border border-vs-border rounded shadow-2xl w-[680px] max-w-[90vw]" style={{ maxHeight: '80vh' }}>
+        <div className="flex items-center gap-3 px-4 py-2.5 border-b border-vs-border shrink-0">
+          <span className="font-mono text-sm text-[#9cdcfe] truncate flex-1">{column}</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded border text-[#4ec9b0] border-[#4ec9b0]/50">json</span>
+          <button onClick={onClose} className="text-vs-textDim hover:text-vs-text transition-colors ml-1">
+            <X size={15} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-hidden p-3 min-h-0">
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={(e) => { setText(e.target.value); setJsonError(null) }}
+            className="w-full bg-vs-editor font-mono text-xs text-vs-text border border-vs-border rounded p-2 outline-none focus:border-vs-statusBar resize-none"
+            style={{ height: '300px' }}
+            spellCheck={false}
+          />
+          {jsonError && <p className="text-xs text-[#f48771] mt-1">{jsonError}</p>}
+        </div>
+        <div className="flex gap-2 justify-end px-4 py-3 border-t border-vs-border shrink-0">
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 text-sm text-vs-textDim hover:text-vs-text hover:bg-vs-hover rounded transition-colors"
+          >
+            Отмена
+          </button>
+          <button
+            onClick={handleSave}
+            className="px-4 py-1.5 text-sm bg-[#0e7490] hover:bg-[#0c6478] text-white rounded transition-colors"
+          >
+            Сохранить
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Inline edit cell ─────────────────────────────────────────────────────
+
+function InlineEditCell({
+  column, originalVal, pendingVal, isPk,
+  onCommit
+}: {
+  column: string
+  originalVal: unknown
+  pendingVal: unknown
+  isPk: boolean
+  onCommit: (value: string | null) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [jsonModal, setJsonModal] = useState(false)
+  const inputRef = React.useRef<HTMLInputElement>(null)
+  const isDirty = pendingVal !== undefined
+  const displayVal = isDirty ? pendingVal : originalVal
+  const isJson = detectType(originalVal) === 'json'
+
+  const displayStr = displayVal == null
+    ? null
+    : displayVal instanceof Date ? formatDate(displayVal)
+    : typeof displayVal === 'object' ? JSON.stringify(displayVal)
+    : String(displayVal)
+
+  useEffect(() => { if (editing) inputRef.current?.focus() }, [editing])
+
+  if (isPk) {
+    return (
+      <span className="text-vs-textDim opacity-70 select-none truncate block w-full" title="Первичный ключ — не редактируется">
+        {displayStr ?? <em className="italic">NULL</em>}
+      </span>
+    )
+  }
+
+  if (isJson) {
+    return (
+      <>
+        <span
+          onDoubleClick={() => setJsonModal(true)}
+          className={`block w-full truncate cursor-pointer ${isDirty ? 'text-[#e6db74]' : ''}`}
+          title={isDirty ? `Изменено (двойной клик — редактировать)` : 'Двойной клик — редактировать JSON'}
+        >
+          {displayStr == null
+            ? <span className="text-vs-textDim italic">NULL</span>
+            : displayStr}
+        </span>
+        {jsonModal && (
+          <JsonEditModal
+            column={column}
+            initialValue={isDirty ? pendingVal : originalVal}
+            onSave={(v) => { onCommit(v); setJsonModal(false) }}
+            onClose={() => setJsonModal(false)}
+          />
+        )}
+      </>
+    )
+  }
+
+  if (!editing) {
+    return (
+      <span
+        onDoubleClick={() => setEditing(true)}
+        className={`block w-full truncate cursor-text ${isDirty ? 'text-[#e6db74]' : ''}`}
+        title={isDirty ? `Изменено: ${displayStr ?? 'NULL'}` : (displayStr ?? 'NULL')}
+      >
+        {displayStr == null
+          ? <span className="text-vs-textDim italic">NULL</span>
+          : displayStr}
+      </span>
+    )
+  }
+
+  return (
+    <input
+      ref={inputRef}
+      defaultValue={displayStr ?? ''}
+      onBlur={(e) => { onCommit(e.target.value === '' ? null : e.target.value); setEditing(false) }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') { onCommit(e.currentTarget.value === '' ? null : e.currentTarget.value); setEditing(false) }
+        if (e.key === 'Escape') setEditing(false)
+      }}
+      onClick={(e) => e.stopPropagation()}
+      className="w-full min-w-[80px] bg-vs-input border border-vs-statusBar outline-none px-1 text-vs-text font-mono text-xs"
+    />
+  )
+}
+
 // ─── Main ──────────────────────────────────────────────────────────────────
 
-export default function ResultsGrid({ result, error, loading }: Props) {
+export default function ResultsGrid({ result, error, loading, editMode, pkCols = [], pendingEdits, onCellChange }: Props) {
   const [activeCell, setActiveCell] = useState<CellInfo | null>(null)
 
   if (loading) {
@@ -313,33 +482,57 @@ export default function ResultsGrid({ result, error, loading }: Props) {
               </tr>
             </thead>
             <tbody>
-              {result.rows.map((row, i) => (
-                <tr key={i} className="hover:bg-vs-hover border-b border-vs-border">
-                  <td className="px-2 py-1 text-right text-vs-textDim border-r border-vs-border select-none">
-                    {i + 1}
-                  </td>
-                  {result.columns.map((col) => {
-                    const val = row[col]
-                    const display = val == null
-                      ? null
-                      : val instanceof Date ? formatDate(val)
-                      : typeof val === 'object' ? JSON.stringify(val) : String(val)
-                    return (
-                      <td
-                        key={col}
-                        onDoubleClick={() => setActiveCell({ column: col, value: val })}
-                        className="px-2 py-1 text-vs-text border-r border-vs-border max-w-xs truncate cursor-default"
-                        title={display ?? 'NULL'}
-                      >
-                        {display == null
-                          ? <span className="text-vs-textDim italic">NULL</span>
-                          : display
-                        }
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
+              {result.rows.map((row, i) => {
+                const rowEdits = pendingEdits?.get(i)
+                const rowDirty = rowEdits && Object.keys(rowEdits).length > 0
+                return (
+                  <tr key={i} className={`border-b border-vs-border ${rowDirty ? 'bg-[#e6db74]/5' : 'hover:bg-vs-hover'}`}>
+                    <td className="px-2 py-1 text-right text-vs-textDim border-r border-vs-border select-none">
+                      {i + 1}
+                    </td>
+                    {result.columns.map((col) => {
+                      const val = row[col]
+                      const pendingVal = rowEdits?.[col]
+                      const isPk = pkCols.includes(col)
+                      const display = val == null
+                        ? null
+                        : val instanceof Date ? formatDate(val)
+                        : typeof val === 'object' ? JSON.stringify(val) : String(val)
+
+                      if (editMode) {
+                        return (
+                          <td
+                            key={col}
+                            className={`px-2 py-1 border-r border-vs-border max-w-xs overflow-hidden ${isPk ? 'cursor-default' : 'cursor-text'} ${pendingVal !== undefined ? 'bg-[#e6db74]/10' : ''}`}
+                          >
+                            <InlineEditCell
+                              column={col}
+                              originalVal={val}
+                              pendingVal={pendingVal}
+                              isPk={isPk}
+                              onCommit={(v) => onCellChange?.(i, col, v)}
+                            />
+                          </td>
+                        )
+                      }
+
+                      return (
+                        <td
+                          key={col}
+                          onDoubleClick={() => setActiveCell({ column: col, value: val })}
+                          className="px-2 py-1 text-vs-text border-r border-vs-border max-w-xs truncate cursor-default"
+                          title={display ?? 'NULL'}
+                        >
+                          {display == null
+                            ? <span className="text-vs-textDim italic">NULL</span>
+                            : display
+                          }
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
