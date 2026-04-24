@@ -13,7 +13,9 @@ contextBridge.exposeInMainWorld('api', {
     delete: (id: string): Promise<void> =>
       ipcRenderer.invoke('connections:delete', id),
     test: (config: Omit<ConnectionConfig, 'id' | 'createdAt'>): Promise<TestConnectionResult> =>
-      ipcRenderer.invoke('connections:test', config)
+      ipcRenderer.invoke('connections:test', config),
+    pickFile: (mode: 'sqlite' | 'sshkey'): Promise<string | null> =>
+      ipcRenderer.invoke('connections:pickFile', mode)
   },
   schema: {
     connect: (connectionId: string): Promise<string[]> =>

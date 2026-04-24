@@ -110,9 +110,21 @@ function ConnectionsPanel({
                   />
                 ) : null
               })()}
-              <span className="flex-1 truncate" title={`${conn.user}@${conn.host}:${conn.port}`}>
+              <span className="flex-1 truncate" title={
+                conn.type === 'sqlite' ? conn.filePath ?? conn.name
+                : `${conn.user}@${conn.host}:${conn.port}${conn.ssh ? ' (SSH)' : ''}`
+              }>
                 {conn.name}
               </span>
+              <span className={`shrink-0 text-[9px] px-1 py-0.5 rounded font-mono opacity-60 ${
+                conn.type === 'postgres' ? 'text-[#7ec8e3]' :
+                conn.type === 'sqlite'   ? 'text-[#a8cc8c]' : 'text-[#ce9178]'
+              }`}>
+                {conn.type === 'postgres' ? 'PG' : conn.type === 'sqlite' ? 'SL' : 'MY'}
+              </span>
+              {conn.ssh && !isActive && (
+                <span className="shrink-0 text-[9px] text-[#4ec9b0] opacity-60" title="SSH-туннель">⊞</span>
+              )}
               {/* Green dot: open but not active */}
               {isOpen && !isActive && !isConnecting && (
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0 opacity-80" title="Подключение открыто" />

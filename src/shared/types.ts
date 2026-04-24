@@ -1,11 +1,26 @@
+export type DbType = 'mysql' | 'postgres' | 'sqlite'
+
+export interface SSHConfig {
+  host: string
+  port: number
+  user: string
+  authType: 'password' | 'key'
+  password?: string
+  keyPath?: string
+  passphrase?: string
+}
+
 export interface ConnectionConfig {
   id: string
   name: string
+  type?: DbType          // default 'mysql' for backwards compat
   host: string
   port: number
   user: string
   password: string
   database?: string
+  filePath?: string      // SQLite only
+  ssh?: SSHConfig
   tag?: string
   createdAt: string
 }

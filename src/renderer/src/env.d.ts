@@ -13,6 +13,7 @@ declare global {
         save: (config: ConnectionConfig) => Promise<void>
         delete: (id: string) => Promise<void>
         test: (config: Omit<ConnectionConfig, 'id' | 'createdAt'>) => Promise<TestConnectionResult>
+        pickFile: (mode: 'sqlite' | 'sshkey') => Promise<string | null>
       }
       schema: {
         connect: (connectionId: string) => Promise<string[]>
