@@ -9,12 +9,14 @@
     "preview": "electron-vite preview",
     "package": "electron-vite build && electron-builder",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
-    "typecheck:web": "tsc --noEmit -p tsconfig.web.json"
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
+    "postinstall": "electron-rebuild -f -w better-sqlite3"
   },
   "author": "",
   "license": "MIT",
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
+    "better-sqlite3": "^12.9.0",
     "lucide-react": "^0.460.0",
     "monaco-editor": "^0.52.0",
     "mysql2": "^3.11.4",
@@ -25,6 +27,8 @@
     "ssh2": "^1.17.0"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.9.0",
     "@types/pg": "^8.20.0",
     "@types/react": "^18.3.12",

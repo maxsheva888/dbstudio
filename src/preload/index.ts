@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import type {
   ConnectionConfig, TestConnectionResult, TableInfo, ColumnInfo, QueryResult,
+  IndexInfo, ForeignKeyInfo,
   ScriptFile, ScriptVersion, ScriptStats, ScriptSuggestions, HistoryEntry, QueryLogEntry
 } from '../shared/types'
 
@@ -29,20 +30,35 @@ contextBridge.exposeInMainWorld('api', {
     columns: (connectionId: string, database: string, table: string): Promise<ColumnInfo[]> =>
       ipcRenderer.invoke('schema:columns', connectionId, database, table),
     dbSizes: (connectionId: string): Promise<Record<string, number>> =>
-      ipcRenderer.invoke('schema:dbSizes', connectionId)
+      ipcRenderer.invoke('schema:dbSizes', connectionId),
+    indexes: (connectionId: string, database: string, table: string): Promise<IndexInfo[]> =>
+      ipcRenderer.invoke('schema:indexes', connectionId, database, table),
+    foreignKeys: (connectionId: string, database: string, table: string): Promise<ForeignKeyInfo[]> =>
+      ipcRenderer.invoke('schema:foreignKeys', connectionId, database, table),
+    ddl: (connectionId: string, database: string, table: string): Promise<string> =>
+      ipcRenderer.invoke('schema:ddl', connectionId, database, table)
   },
   query: {
-    execute: (connectionId: string, database: string | null, sql: string): Promise<QueryResult> =>
-      ipcRenderer.invoke('query:execute', connectionId, database, sql)
+    execute: (connectionId: string, database: string | null, sql: string, sourceLabel?: string, scriptId?: string): Promise<QueryResult> =>
+      ipcRenderer.invoke('query:execute', connectionId, database, sql, sourceLabel, scriptId)
   },
   queryLog: {
     get: (): Promise<QueryLogEntry[]> =>
       ipcRenderer.invoke('queryLog:get'),
+    explain: (entryId: number, connectionId: string, database: string | null, sql: string): Promise<boolean> =>
+      ipcRenderer.invoke('queryLog:explain', entryId, connectionId, database, sql),
+    clear: (): Promise<void> =>
+      ipcRenderer.invoke('queryLog:clear'),
     onEntry: (cb: (entry: QueryLogEntry) => void): (() => void) => {
       const listener = (_e: IpcRendererEvent, entry: QueryLogEntry) => cb(entry)
       ipcRenderer.on('queryLog:entry', listener)
       return () => ipcRenderer.removeListener('queryLog:entry', listener)
-    }
+    },
+    onEntryUpdate: (cb: (entry: QueryLogEntry) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, entry: QueryLogEntry) => cb(entry)
+      ipcRenderer.on('queryLog:entryUpdate', listener)
+      return () => ipcRenderer.removeListener('queryLog:entryUpdate', listener)
+    },
   },
   scripts: {
     list: (): Promise<ScriptFile[]> =>

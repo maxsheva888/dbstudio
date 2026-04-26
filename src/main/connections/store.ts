@@ -40,6 +40,12 @@ export function loadConnections(): ConnectionConfig[] {
         const { passwordEncrypted: sshPwEnc, ...sshRest } = ssh
         conn.ssh = { ...sshRest, password: sshPwEnc ? decrypt(sshPwEnc) : undefined }
       }
+      // migrate old single tag → tags array
+      const legacy = conn as ConnectionConfig & { tag?: string }
+      if (!conn.tags && legacy.tag) {
+        conn.tags = [legacy.tag]
+        delete legacy.tag
+      }
       return conn
     })
   } catch {

@@ -10,6 +10,7 @@ interface Props {
   pkCols?: string[]
   pendingEdits?: Map<number, Record<string, unknown>>
   onCellChange?: (rowIdx: number, col: string, value: string | null) => void
+  onRevertCell?: (rowIdx: number, col: string) => void
 }
 
 // ─── type helpers ──────────────────────────────────────────────────────────
@@ -43,6 +44,19 @@ function toJson(val: unknown): unknown {
   if (typeof val === 'object') return val
   if (typeof val === 'string') { try { return JSON.parse(val) } catch {} }
   return val
+}
+
+function toDateInputValue(val: unknown): string {
+  let d: Date | null = null
+  if (val instanceof Date) {
+    d = val
+  } else if (typeof val === 'string') {
+    const parsed = new Date(val.replace(' ', 'T'))
+    if (!isNaN(parsed.getTime())) d = parsed
+  }
+  if (!d) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
 function escHtml(s: string): string {
@@ -289,8 +303,8 @@ function JsonEditModal({
             ref={textareaRef}
             value={text}
             onChange={(e) => { setText(e.target.value); setJsonError(null) }}
-            className="w-full bg-vs-editor font-mono text-xs text-vs-text border border-vs-border rounded p-2 outline-none focus:border-vs-statusBar resize-none"
-            style={{ height: '300px' }}
+            className="w-full font-mono text-xs border border-vs-border rounded p-2 outline-none focus:border-vs-statusBar resize-none"
+            style={{ height: '300px', backgroundColor: '#1e1e1e', color: '#d4d4d4', colorScheme: 'dark' }}
             spellCheck={false}
           />
           {jsonError && <p className="text-xs text-[#f48771] mt-1">{jsonError}</p>}
@@ -318,20 +332,23 @@ function JsonEditModal({
 
 function InlineEditCell({
   column, originalVal, pendingVal, isPk,
-  onCommit
+  onCommit, onRevert,
 }: {
   column: string
   originalVal: unknown
   pendingVal: unknown
   isPk: boolean
   onCommit: (value: string | null) => void
+  onRevert?: () => void
 }) {
   const [editing, setEditing] = useState(false)
   const [jsonModal, setJsonModal] = useState(false)
   const inputRef = React.useRef<HTMLInputElement>(null)
   const isDirty = pendingVal !== undefined
   const displayVal = isDirty ? pendingVal : originalVal
-  const isJson = detectType(originalVal) === 'json'
+  const origType = detectType(originalVal)
+  const isJson = origType === 'json'
+  const isDate = origType === 'date'
 
   const displayStr = displayVal == null
     ? null
@@ -365,7 +382,13 @@ function InlineEditCell({
           <JsonEditModal
             column={column}
             initialValue={isDirty ? pendingVal : originalVal}
-            onSave={(v) => { onCommit(v); setJsonModal(false) }}
+            onSave={(v) => {
+              const origStr = isDirty
+                ? (pendingVal == null ? null : String(pendingVal))
+                : (originalVal == null ? null : (typeof originalVal === 'object' ? JSON.stringify(originalVal) : String(originalVal)))
+              if (v !== origStr) onCommit(v)
+              setJsonModal(false)
+            }}
             onClose={() => setJsonModal(false)}
           />
         )}
@@ -373,12 +396,67 @@ function InlineEditCell({
     )
   }
 
+  if (isDate && editing) {
+    const dateInputVal = toDateInputValue(displayVal)
+    return (
+      <input
+        ref={inputRef}
+        type="datetime-local"
+        step="1"
+        defaultValue={dateInputVal}
+        onBlur={(e) => {
+          if (!e.target.value) { onCommit(null); setEditing(false); return }
+          const mysqlDate = e.target.value.replace('T', ' ')
+          if (mysqlDate !== (displayStr ?? '')) onCommit(mysqlDate)
+          setEditing(false)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            if (!e.currentTarget.value) { onCommit(null); setEditing(false); return }
+            const mysqlDate = e.currentTarget.value.replace('T', ' ')
+            if (mysqlDate !== (displayStr ?? '')) onCommit(mysqlDate)
+            setEditing(false)
+          }
+          if (e.key === 'Escape') setEditing(false)
+        }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full min-w-[180px] bg-vs-input border border-vs-statusBar outline-none px-1 text-vs-text font-mono text-xs"
+        style={{ colorScheme: 'dark' }}
+      />
+    )
+  }
+
   if (!editing) {
+    if (isDirty) {
+      return (
+        <div className="flex items-center gap-1 w-full min-w-0 group">
+          <span
+            className="w-[5px] h-[5px] rounded-full bg-[#c586c0] shrink-0"
+            style={{ boxShadow: '0 0 0 2px rgba(197,134,192,0.25)' }}
+            title={`Было: ${displayStr ?? 'NULL'}`}
+          />
+          <span
+            onDoubleClick={() => setEditing(true)}
+            className="flex-1 truncate cursor-text text-[#c586c0] font-medium"
+            title={`Изменено: ${displayStr ?? 'NULL'}`}
+          >
+            {displayStr == null ? <span className="italic opacity-60">NULL</span> : displayStr}
+          </span>
+          <button
+            onClick={(e) => { e.stopPropagation(); onRevert?.() }}
+            className="shrink-0 opacity-0 group-hover:opacity-100 text-vs-textDim hover:text-[#f48771] text-[12px] leading-none px-0.5 transition-opacity"
+            title="Откатить изменение"
+          >
+            ↩
+          </button>
+        </div>
+      )
+    }
     return (
       <span
         onDoubleClick={() => setEditing(true)}
-        className={`block w-full truncate cursor-text ${isDirty ? 'text-[#e6db74]' : ''}`}
-        title={isDirty ? `Изменено: ${displayStr ?? 'NULL'}` : (displayStr ?? 'NULL')}
+        className="block w-full truncate cursor-text"
+        title={displayStr ?? 'NULL'}
       >
         {displayStr == null
           ? <span className="text-vs-textDim italic">NULL</span>
@@ -388,23 +466,37 @@ function InlineEditCell({
   }
 
   return (
-    <input
-      ref={inputRef}
-      defaultValue={displayStr ?? ''}
-      onBlur={(e) => { onCommit(e.target.value === '' ? null : e.target.value); setEditing(false) }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') { onCommit(e.currentTarget.value === '' ? null : e.currentTarget.value); setEditing(false) }
-        if (e.key === 'Escape') setEditing(false)
-      }}
-      onClick={(e) => e.stopPropagation()}
-      className="w-full min-w-[80px] bg-vs-input border border-vs-statusBar outline-none px-1 text-vs-text font-mono text-xs"
-    />
+    <div className="relative">
+      <span className="absolute -top-[14px] left-0 px-1 py-px bg-vs-accent text-white text-[8px] font-bold font-mono tracking-wider rounded-sm leading-tight pointer-events-none z-10">
+        EDIT
+      </span>
+      <input
+        ref={inputRef}
+        defaultValue={displayStr ?? ''}
+        onBlur={(e) => {
+          const newVal = e.target.value === '' ? null : e.target.value
+          if (newVal !== (displayStr ?? null)) onCommit(newVal)
+          setEditing(false)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            const newVal = e.currentTarget.value === '' ? null : e.currentTarget.value
+            if (newVal !== (displayStr ?? null)) onCommit(newVal)
+            setEditing(false)
+          }
+          if (e.key === 'Escape') setEditing(false)
+        }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full min-w-[80px] bg-vs-bg border-2 border-vs-accent outline-none px-1 text-vs-text font-mono text-xs"
+        style={{ boxShadow: '0 0 0 3px rgba(14,165,233,0.15)' }}
+      />
+    </div>
   )
 }
 
 // ─── Main ──────────────────────────────────────────────────────────────────
 
-export default function ResultsGrid({ result, error, loading, editMode, pkCols = [], pendingEdits, onCellChange }: Props) {
+export default function ResultsGrid({ result, error, loading, editMode, pkCols = [], pendingEdits, onCellChange, onRevertCell }: Props) {
   const [activeCell, setActiveCell] = useState<CellInfo | null>(null)
 
   if (loading) {
@@ -486,8 +578,9 @@ export default function ResultsGrid({ result, error, loading, editMode, pkCols =
                 const rowEdits = pendingEdits?.get(i)
                 const rowDirty = rowEdits && Object.keys(rowEdits).length > 0
                 return (
-                  <tr key={i} className={`border-b border-vs-border ${rowDirty ? 'bg-[#e6db74]/5' : 'hover:bg-vs-hover'}`}>
-                    <td className="px-2 py-1 text-right text-vs-textDim border-r border-vs-border select-none">
+                  <tr key={i} className={`border-b border-vs-border ${rowDirty ? 'bg-[#c586c008]' : 'hover:bg-vs-hover'}`}>
+                    <td className={`px-2 py-1 text-right text-vs-textDim border-r border-vs-border select-none relative ${rowDirty ? 'bg-[#c586c018]' : ''}`}>
+                      {rowDirty && <span className="absolute top-0 bottom-0 left-0 w-[2px] bg-[#c586c0]" />}
                       {i + 1}
                     </td>
                     {result.columns.map((col) => {
@@ -503,7 +596,7 @@ export default function ResultsGrid({ result, error, loading, editMode, pkCols =
                         return (
                           <td
                             key={col}
-                            className={`px-2 py-1 border-r border-vs-border max-w-xs overflow-hidden ${isPk ? 'cursor-default' : 'cursor-text'} ${pendingVal !== undefined ? 'bg-[#e6db74]/10' : ''}`}
+                            className={`px-2 py-1 border-r border-vs-border max-w-xs ${pendingVal !== undefined ? 'overflow-visible' : 'overflow-hidden'} ${isPk ? 'cursor-default' : 'cursor-text'} ${pendingVal !== undefined ? 'bg-[#c586c010]' : ''}`}
                           >
                             <InlineEditCell
                               column={col}
@@ -511,6 +604,7 @@ export default function ResultsGrid({ result, error, loading, editMode, pkCols =
                               pendingVal={pendingVal}
                               isPk={isPk}
                               onCommit={(v) => onCellChange?.(i, col, v)}
+                              onRevert={() => onRevertCell?.(i, col)}
                             />
                           </td>
                         )

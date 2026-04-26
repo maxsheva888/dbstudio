@@ -3,6 +3,7 @@ import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels'
 import { ConnectionsProvider } from './context/ConnectionsContext'
 import { ScriptsProvider } from './context/ScriptsContext'
 import { SettingsProvider } from './context/SettingsContext'
+import { TagsProvider } from './context/TagsContext'
 import ActivityBar from './components/layout/ActivityBar'
 import Sidebar from './components/layout/Sidebar'
 import ScriptsBar from './components/layout/ScriptsBar'
@@ -23,6 +24,7 @@ export default function App() {
   const [pendingRunSql, setPendingRunSql] = useState<string | undefined>()
   const [scriptToRun, setScriptToRun] = useState<ScriptFile | undefined>()
   const [openLogTrigger, setOpenLogTrigger] = useState(0)
+  const [tableViewToOpen, setTableViewToOpen] = useState<{ connectionId: string; database: string; table: string } | undefined>()
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -35,9 +37,9 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  function handleTableSelect(database: string, table: string) {
+  function handleTableSelect(connectionId: string, database: string, table: string) {
     setActiveTable(table)
-    setPendingSql(`SELECT *\nFROM \`${database}\`.\`${table}\`\nLIMIT 100;`)
+    setTableViewToOpen({ connectionId, database, table })
   }
 
   const handleOpenScript = useCallback((script: ScriptFile) => {
@@ -46,13 +48,14 @@ export default function App() {
 
   return (
     <SettingsProvider>
+      <TagsProvider>
       <ConnectionsProvider>
         <ScriptsProvider>
           <div className="flex flex-col h-screen overflow-hidden bg-vs-bg text-vs-text">
             <div className="flex flex-1 overflow-hidden min-h-0">
               <ActivityBar activePanel={activePanel} onPanelChange={setActivePanel} onOpenLog={() => setOpenLogTrigger((n) => n + 1)} />
               <PanelGroup direction="horizontal" autoSaveId="dbstudio-layout" className="flex-1 min-w-0">
-                <Panel id="left-sidebar" defaultSize={20} minSize={10} maxSize={40}>
+                <Panel id="left-sidebar" defaultSize={20} minSize={10} maxSize={40} style={{ minWidth: '250px' }}>
                   <Sidebar
                     activePanel={activePanel}
                     onTableSelect={handleTableSelect}
@@ -62,7 +65,7 @@ export default function App() {
                     onRunSql={(sql) => setPendingRunSql(sql)}
                   />
                 </Panel>
-                <PanelResizeHandle className="w-[3px] bg-vs-border hover:bg-vs-statusBar transition-colors cursor-col-resize shrink-0" />
+                <PanelResizeHandle className="w-[1.5px] bg-vs-border hover:bg-vs-statusBar transition-colors cursor-col-resize shrink-0" />
                 <Panel id="editor" minSize={30}>
                   <EditorArea
                     initialSql={pendingSql}
@@ -77,10 +80,12 @@ export default function App() {
                     onOpenPalette={() => setPaletteOpen(true)}
                     newTabTrigger={newTabTrigger}
                     openLogTrigger={openLogTrigger}
+                    openTableView={tableViewToOpen}
+                    onOpenTableViewConsumed={() => setTableViewToOpen(undefined)}
                   />
                 </Panel>
-                <PanelResizeHandle className="w-[3px] bg-vs-border hover:bg-vs-statusBar transition-colors cursor-col-resize shrink-0" />
-                <Panel id="right-sidebar" defaultSize={17} minSize={10} maxSize={40}>
+                <PanelResizeHandle className="w-[1.5px] bg-vs-border hover:bg-vs-statusBar transition-colors cursor-col-resize shrink-0" />
+                <Panel id="right-sidebar" defaultSize={17} minSize={10} maxSize={40} style={{ minWidth: '250px' }}>
                   <ScriptsBar onOpenScript={handleOpenScript} activeTable={activeTable} />
                 </Panel>
               </PanelGroup>
@@ -97,6 +102,7 @@ export default function App() {
           )}
         </ScriptsProvider>
       </ConnectionsProvider>
+      </TagsProvider>
     </SettingsProvider>
   )
 }

@@ -20,13 +20,17 @@ const DEFAULTS: Settings = { theme: 'dark', editorFontSize: 14, safeMode: true }
 function load(): Settings {
   try {
     const raw = localStorage.getItem('dbstudio-settings')
-    if (raw) return { ...DEFAULTS, ...JSON.parse(raw) }
+    if (raw) {
+      const { safeMode: _ignored, ...saved } = JSON.parse(raw)
+      return { ...DEFAULTS, ...saved }
+    }
   } catch { /* ignore */ }
   return DEFAULTS
 }
 
 function persist(s: Settings) {
-  localStorage.setItem('dbstudio-settings', JSON.stringify(s))
+  const { safeMode: _ignored, ...toSave } = s
+  localStorage.setItem('dbstudio-settings', JSON.stringify(toSave))
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null)

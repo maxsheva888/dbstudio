@@ -1,8 +1,7 @@
 import mysql from 'mysql2/promise'
-import type { ConnectionConfig, QueryResult, TableInfo, ColumnInfo, TestConnectionResult } from '../../shared/types'
+import type { ConnectionConfig, QueryResult, TableInfo, ColumnInfo, IndexInfo, ForeignKeyInfo, TestConnectionResult } from '../../shared/types'
 import type { DatabaseAdapter } from './adapter'
 
-const SYSTEM_DBS = new Set(['information_schema', 'mysql', 'performance_schema', 'sys'])
 const MAX_ROWS = 2000
 
 export class MySQLAdapter implements DatabaseAdapter {
@@ -54,7 +53,7 @@ export class MySQLAdapter implements DatabaseAdapter {
 
   async getDatabases(): Promise<string[]> {
     const [rows] = await this.pool().query<mysql.RowDataPacket[]>('SHOW DATABASES')
-    return rows.map((r) => r['Database'] as string).filter((db) => !SYSTEM_DBS.has(db))
+    return rows.map((r) => r['Database'] as string)
   }
 
   async getTables(database: string): Promise<TableInfo[]> {
@@ -105,6 +104,83 @@ export class MySQLAdapter implements DatabaseAdapter {
       refTable: (r.refTable as string | null) ?? null,
       indexName: (r.indexName as string | null) ?? null
     }))
+  }
+
+  async getIndexes(database: string, table: string): Promise<IndexInfo[]> {
+    const [rows] = await this.pool().query<mysql.RowDataPacket[]>(
+      `SELECT INDEX_NAME as name, COLUMN_NAME as col, SEQ_IN_INDEX as seq,
+              NON_UNIQUE as nonUnique, NULLABLE as nullable, INDEX_TYPE as type,
+              CARDINALITY as cardinality
+       FROM information_schema.STATISTICS
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
+       ORDER BY INDEX_NAME, SEQ_IN_INDEX`,
+      [database, table]
+    )
+    const map = new Map<string, IndexInfo>()
+    for (const r of rows) {
+      const name = r.name as string
+      if (!map.has(name)) {
+        const isPk = name === 'PRIMARY'
+        const isUnique = (r.nonUnique as number) === 0
+        map.set(name, {
+          name,
+          columns: [],
+          type: (r.type as string) || 'BTREE',
+          unique: isUnique,
+          nullable: r.nullable === 'YES',
+          kind: isPk ? 'PK' : isUnique ? 'UNIQUE' : 'INDEX',
+          cardinality: r.cardinality != null ? Number(r.cardinality) : undefined,
+        })
+      }
+      map.get(name)!.columns.push(r.col as string)
+    }
+    return Array.from(map.values())
+  }
+
+  async getForeignKeys(database: string, table: string): Promise<ForeignKeyInfo[]> {
+    const [rows] = await this.pool().query<mysql.RowDataPacket[]>(
+      `SELECT k.CONSTRAINT_NAME as name,
+              k.COLUMN_NAME as col,
+              k.REFERENCED_TABLE_NAME as refTable,
+              k.REFERENCED_COLUMN_NAME as refCol,
+              r.UPDATE_RULE as onUpdate,
+              r.DELETE_RULE as onDelete,
+              k.ORDINAL_POSITION as pos
+       FROM information_schema.KEY_COLUMN_USAGE k
+       JOIN information_schema.REFERENTIAL_CONSTRAINTS r
+         ON r.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA
+         AND r.CONSTRAINT_NAME = k.CONSTRAINT_NAME
+       WHERE k.TABLE_SCHEMA = ? AND k.TABLE_NAME = ?
+         AND k.REFERENCED_TABLE_NAME IS NOT NULL
+       ORDER BY k.CONSTRAINT_NAME, k.ORDINAL_POSITION`,
+      [database, table]
+    )
+    const map = new Map<string, ForeignKeyInfo>()
+    for (const r of rows) {
+      const name = r.name as string
+      if (!map.has(name)) {
+        map.set(name, {
+          name,
+          columns: [],
+          refTable: r.refTable as string,
+          refColumns: [],
+          onUpdate: (r.onUpdate as string) || 'RESTRICT',
+          onDelete: (r.onDelete as string) || 'RESTRICT',
+        })
+      }
+      const fk = map.get(name)!
+      fk.columns.push(r.col as string)
+      fk.refColumns.push(r.refCol as string)
+    }
+    return Array.from(map.values())
+  }
+
+  async getDdl(database: string, table: string): Promise<string> {
+    const [rows] = await this.pool(database).query<mysql.RowDataPacket[]>(
+      `SHOW CREATE TABLE \`${database.replace(/`/g, '')}\`.\`${table.replace(/`/g, '')}\``
+    )
+    const row = rows[0] as mysql.RowDataPacket
+    return (row['Create Table'] ?? row['Create View'] ?? '') as string
   }
 
   async getDbSizes(): Promise<Record<string, number>> {

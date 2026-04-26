@@ -21,7 +21,7 @@ export interface ConnectionConfig {
   database?: string
   filePath?: string      // SQLite only
   ssh?: SSHConfig
-  tag?: string
+  tags?: string[]
   createdAt: string
 }
 
@@ -54,6 +54,25 @@ export interface QueryResult {
   rowCount: number
   affectedRows?: number
   durationMs: number
+}
+
+export interface IndexInfo {
+  name: string
+  columns: string[]
+  type: string
+  unique: boolean
+  nullable: boolean
+  kind: 'PK' | 'UNIQUE' | 'INDEX'
+  cardinality?: number
+}
+
+export interface ForeignKeyInfo {
+  name: string
+  columns: string[]
+  refTable: string
+  refColumns: string[]
+  onUpdate: string
+  onDelete: string
 }
 
 // ── Script Library ───────────────────────────────────────────────────────────
@@ -107,6 +126,20 @@ export interface ScriptSuggestions {
   archiveCandidates: Array<ScriptFile & { lastRunAt: number | null }>
 }
 
+export type QueryLogKind =
+  | 'SELECT' | 'UPDATE' | 'INSERT' | 'DELETE'
+  | 'DDL' | 'EXPLAIN' | 'BEGIN' | 'CONNECT' | 'OTHER'
+
+export type QueryLogStatus = 'ok' | 'slow' | 'error' | 'cancelled'
+
+export type QueryLogGrade = 'A' | 'B' | 'C' | 'D' | 'F' | '?'
+
+export interface QueryLogPlan {
+  rows: number
+  scan: 'pk' | 'index' | 'range' | 'full' | 'meta'
+  cost: number
+}
+
 export interface QueryLogEntry {
   id: number
   sql: string
@@ -116,7 +149,15 @@ export interface QueryLogEntry {
   error: string | null
   rowCount: number | null
   ranAt: number
-  source: 'user' | 'system'
+  kind: QueryLogKind
+  status: QueryLogStatus
+  sourceLabel: string
+  scriptId?: string
+  user: string | null
+  tx: boolean
+  plan?: QueryLogPlan
+  grade: QueryLogGrade
+  hints: string[]
 }
 
 export interface AnonLog {

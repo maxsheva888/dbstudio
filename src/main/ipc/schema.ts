@@ -44,4 +44,16 @@ export function registerSchemaHandlers(): void {
     logEntry({ sql: `SHOW COLUMNS FROM \`${database}\`.\`${table}\``, connectionId, database, durationMs: Date.now() - ranAt, error: null, rowCount: columns.length, ranAt, source: 'system' })
     return columns
   })
+
+  ipcMain.handle('schema:indexes', async (_e, connectionId: string, database: string, table: string) => {
+    return getAdapter(connectionId).getIndexes(database, table)
+  })
+
+  ipcMain.handle('schema:foreignKeys', async (_e, connectionId: string, database: string, table: string) => {
+    return getAdapter(connectionId).getForeignKeys(database, table)
+  })
+
+  ipcMain.handle('schema:ddl', async (_e, connectionId: string, database: string, table: string) => {
+    return getAdapter(connectionId).getDdl(database, table)
+  })
 }

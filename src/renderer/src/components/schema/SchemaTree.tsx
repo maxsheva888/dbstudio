@@ -19,7 +19,7 @@ interface TableState {
 }
 
 interface Props {
-  onTableSelect?: (database: string, table: string) => void
+  onTableSelect?: (connectionId: string, database: string, table: string) => void
 }
 
 const SYSTEM_DBS = new Set(['information_schema', 'mysql', 'performance_schema', 'sys'])
@@ -200,6 +200,7 @@ export default function SchemaTree({ onTableSelect }: Props) {
         const dbTotalSize = dbSizes[db] ?? 0
         return (
           <div key={db}>
+            <div style={{ position: 'sticky', top: 0, zIndex: 2, backgroundColor: '#1a1a1c' }}>
             <div
               className={`flex items-center gap-1 px-2 py-0.5 cursor-pointer rounded mx-1
                 ${isActive ? 'bg-vs-selected text-white' : 'hover:bg-vs-hover'}
@@ -220,6 +221,7 @@ export default function SchemaTree({ onTableSelect }: Props) {
                 </span>
               )}
             </div>
+            </div>
 
             {ds?.expanded && ds.tables && (
               <div className="ml-4">
@@ -236,8 +238,8 @@ export default function SchemaTree({ onTableSelect }: Props) {
                       <div
                         className="flex items-center gap-1 px-2 py-0.5 cursor-pointer rounded mx-1 hover:bg-vs-hover group"
                         onClick={() => toggleTable(db, t.name)}
-                        onDoubleClick={() => onTableSelect?.(db, t.name)}
-                        title="Двойной клик — SELECT * FROM table"
+                        onDoubleClick={() => activeConnectionId && onTableSelect?.(activeConnectionId, db, t.name)}
+                        title="Двойной клик — открыть структуру таблицы"
                       >
                         {ts?.loading
                           ? <Loader2 size={12} className="animate-spin text-vs-statusBar shrink-0" />

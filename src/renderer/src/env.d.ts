@@ -2,6 +2,7 @@
 import type {
   ConnectionConfig, TestConnectionResult,
   TableInfo, ColumnInfo, QueryResult,
+  IndexInfo, ForeignKeyInfo,
   ScriptFile, ScriptVersion, ScriptStats, ScriptSuggestions, HistoryEntry, QueryLogEntry
 } from '@shared/types'
 
@@ -22,13 +23,19 @@ declare global {
         tables: (connectionId: string, database: string) => Promise<TableInfo[]>
         columns: (connectionId: string, database: string, table: string) => Promise<ColumnInfo[]>
         dbSizes: (connectionId: string) => Promise<Record<string, number>>
+        indexes: (connectionId: string, database: string, table: string) => Promise<IndexInfo[]>
+        foreignKeys: (connectionId: string, database: string, table: string) => Promise<ForeignKeyInfo[]>
+        ddl: (connectionId: string, database: string, table: string) => Promise<string>
       }
       query: {
-        execute: (connectionId: string, database: string | null, sql: string) => Promise<QueryResult>
+        execute: (connectionId: string, database: string | null, sql: string, sourceLabel?: string, scriptId?: string) => Promise<QueryResult>
       }
       queryLog: {
         get: () => Promise<QueryLogEntry[]>
+        explain: (entryId: number, connectionId: string, database: string | null, sql: string) => Promise<boolean>
+        clear: () => Promise<void>
         onEntry: (cb: (entry: QueryLogEntry) => void) => (() => void)
+        onEntryUpdate: (cb: (entry: QueryLogEntry) => void) => (() => void)
       }
       scripts: {
         list: () => Promise<ScriptFile[]>

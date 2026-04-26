@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3'
 import { statSync } from 'fs'
-import type { ConnectionConfig, QueryResult, TableInfo, ColumnInfo } from '../../shared/types'
+import type { ConnectionConfig, QueryResult, TableInfo, ColumnInfo, IndexInfo, ForeignKeyInfo } from '../../shared/types'
 import type { DatabaseAdapter } from './adapter'
 
 const MAX_ROWS = 2000
@@ -44,9 +44,24 @@ export class SQLiteAdapter implements DatabaseAdapter {
 
   async getTables(_database: string): Promise<TableInfo[]> {
     const rows = this.db
-      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
-      .all() as { name: string }[]
-    return rows.map((r) => ({ name: r.name, tableType: 'BASE TABLE', sizeBytes: 0 }))
+      .prepare("SELECT name, type FROM sqlite_master WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' ORDER BY name")
+      .all() as { name: string; type: string }[]
+
+    const sizeMap = new Map<string, number>()
+    try {
+      const sizeRows = this.db
+        .prepare('SELECT name, SUM(pgsize) AS size_bytes FROM dbstat GROUP BY name')
+        .all() as { name: string; size_bytes: number }[]
+      for (const r of sizeRows) sizeMap.set(r.name, r.size_bytes)
+    } catch {
+      // dbstat virtual table not available in this build
+    }
+
+    return rows.map((r) => ({
+      name: r.name,
+      tableType: r.type === 'view' ? 'VIEW' : 'BASE TABLE',
+      sizeBytes: sizeMap.get(r.name) ?? 0,
+    }))
   }
 
   async getColumns(_database: string, table: string): Promise<ColumnInfo[]> {
@@ -68,6 +83,67 @@ export class SQLiteAdapter implements DatabaseAdapter {
       refTable: fkMap.get(r.name) ?? null,
       indexName: null
     }))
+  }
+
+  async getIndexes(_database: string, table: string): Promise<IndexInfo[]> {
+    const safe = table.replace(/`/g, '')
+    type IRow = { seq: number; name: string; unique: number; origin: string; partial: number }
+    const idxRows = this.db.prepare(`PRAGMA index_list(\`${safe}\`)`).all() as IRow[]
+
+    const result: IndexInfo[] = []
+    // Add implicit primary key from table_info
+    type PRow = { cid: number; name: string; type: string; notnull: number; dflt_value: string | null; pk: number }
+    const cols = this.db.prepare(`PRAGMA table_info(\`${safe}\`)`).all() as PRow[]
+    const pkCols = cols.filter((c) => c.pk > 0).sort((a, b) => a.pk - b.pk).map((c) => c.name)
+    if (pkCols.length > 0) {
+      result.push({ name: 'PRIMARY', columns: pkCols, type: 'BTREE', unique: true, nullable: false, kind: 'PK' })
+    }
+
+    for (const ix of idxRows) {
+      if (ix.origin === 'pk') continue // already handled
+      type ICRow = { seqno: number; cid: number; name: string }
+      const icols = this.db.prepare(`PRAGMA index_info(\`${ix.name.replace(/`/g, '')}\`)`).all() as ICRow[]
+      const isUniq = ix.unique === 1
+      result.push({
+        name: ix.name,
+        columns: icols.map((c) => c.name),
+        type: 'BTREE',
+        unique: isUniq,
+        nullable: false,
+        kind: isUniq ? 'UNIQUE' : 'INDEX',
+      })
+    }
+    return result
+  }
+
+  async getForeignKeys(_database: string, table: string): Promise<ForeignKeyInfo[]> {
+    const safe = table.replace(/`/g, '')
+    type FRow = { id: number; seq: number; table: string; from: string; to: string; on_update: string; on_delete: string }
+    const rows = this.db.prepare(`PRAGMA foreign_key_list(\`${safe}\`)`).all() as FRow[]
+    const map = new Map<number, ForeignKeyInfo>()
+    for (const r of rows) {
+      if (!map.has(r.id)) {
+        map.set(r.id, {
+          name: `fk_${safe}_${r.id}`,
+          columns: [],
+          refTable: r.table,
+          refColumns: [],
+          onUpdate: r.on_update || 'NO ACTION',
+          onDelete: r.on_delete || 'NO ACTION',
+        })
+      }
+      const fk = map.get(r.id)!
+      fk.columns.push(r.from)
+      if (r.to) fk.refColumns.push(r.to)
+    }
+    return Array.from(map.values())
+  }
+
+  async getDdl(_database: string, table: string): Promise<string> {
+    const safe = table.replace(/'/g, "''")
+    type Row = { sql: string }
+    const row = this.db.prepare(`SELECT sql FROM sqlite_master WHERE name = '${safe}'`).get() as Row | undefined
+    return row?.sql ?? ''
   }
 
   async getDbSizes(): Promise<Record<string, number>> {

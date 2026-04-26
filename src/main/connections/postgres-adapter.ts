@@ -1,5 +1,5 @@
 import { Pool, type PoolClient } from 'pg'
-import type { ConnectionConfig, QueryResult, TableInfo, ColumnInfo } from '../../shared/types'
+import type { ConnectionConfig, QueryResult, TableInfo, ColumnInfo, IndexInfo, ForeignKeyInfo } from '../../shared/types'
 import type { DatabaseAdapter } from './adapter'
 
 const SYSTEM_SCHEMAS = new Set([
@@ -134,6 +134,110 @@ export class PostgresAdapter implements DatabaseAdapter {
       refTable: (r.refTable as string | null) ?? null,
       indexName: (r.indexName as string | null) ?? null
     }))
+  }
+
+  async getIndexes(schema: string, table: string): Promise<IndexInfo[]> {
+    const res = await this.pool().query(
+      `SELECT i.relname as name,
+              ix.indisunique as unique,
+              ix.indisprimary as primary,
+              a.attname as col,
+              am.amname as type,
+              c.reltuples::bigint as cardinality
+       FROM pg_index ix
+       JOIN pg_class c ON c.oid = ix.indrelid
+       JOIN pg_class i ON i.oid = ix.indexrelid
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+       JOIN pg_am am ON am.oid = i.relam
+       JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(ix.indkey)
+       WHERE n.nspname = $1 AND c.relname = $2
+       ORDER BY i.relname, a.attnum`,
+      [schema, table]
+    )
+    const map = new Map<string, IndexInfo>()
+    for (const r of res.rows) {
+      const name = r.name as string
+      if (!map.has(name)) {
+        const isPk = r.primary as boolean
+        const isUniq = r.unique as boolean
+        map.set(name, {
+          name,
+          columns: [],
+          type: ((r.type as string) || 'btree').toUpperCase(),
+          unique: isUniq,
+          nullable: false,
+          kind: isPk ? 'PK' : isUniq ? 'UNIQUE' : 'INDEX',
+          cardinality: r.cardinality != null ? Number(r.cardinality) : undefined,
+        })
+      }
+      map.get(name)!.columns.push(r.col as string)
+    }
+    return Array.from(map.values())
+  }
+
+  async getForeignKeys(schema: string, table: string): Promise<ForeignKeyInfo[]> {
+    const res = await this.pool().query(
+      `SELECT tc.constraint_name as name,
+              kcu.column_name as col,
+              ccu.table_name as ref_table,
+              ccu.column_name as ref_col,
+              rc.update_rule as on_update,
+              rc.delete_rule as on_delete,
+              kcu.ordinal_position as pos
+       FROM information_schema.table_constraints tc
+       JOIN information_schema.key_column_usage kcu
+         ON kcu.constraint_name = tc.constraint_name AND kcu.table_schema = tc.table_schema AND kcu.table_name = tc.table_name
+       JOIN information_schema.constraint_column_usage ccu
+         ON ccu.constraint_name = tc.constraint_name AND ccu.table_schema = tc.table_schema
+       JOIN information_schema.referential_constraints rc
+         ON rc.constraint_name = tc.constraint_name AND rc.constraint_schema = tc.table_schema
+       WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = $1 AND tc.table_name = $2
+       ORDER BY tc.constraint_name, kcu.ordinal_position`,
+      [schema, table]
+    )
+    const map = new Map<string, ForeignKeyInfo>()
+    for (const r of res.rows) {
+      const name = r.name as string
+      if (!map.has(name)) {
+        map.set(name, {
+          name,
+          columns: [],
+          refTable: r.ref_table as string,
+          refColumns: [],
+          onUpdate: (r.on_update as string) || 'NO ACTION',
+          onDelete: (r.on_delete as string) || 'NO ACTION',
+        })
+      }
+      const fk = map.get(name)!
+      fk.columns.push(r.col as string)
+      fk.refColumns.push(r.ref_col as string)
+    }
+    return Array.from(map.values())
+  }
+
+  async getDdl(schema: string, table: string): Promise<string> {
+    const res = await this.pool().query(
+      `SELECT 'CREATE TABLE ' || quote_ident($1) || '.' || quote_ident($2) || ' (' ||
+              chr(10) ||
+              string_agg(
+                '  ' || quote_ident(column_name) || ' ' ||
+                udt_name ||
+                CASE WHEN character_maximum_length IS NOT NULL
+                     THEN '(' || character_maximum_length || ')'
+                     ELSE '' END ||
+                CASE WHEN is_nullable = 'NO' THEN ' NOT NULL' ELSE '' END ||
+                CASE WHEN column_default IS NOT NULL
+                     THEN ' DEFAULT ' || column_default
+                     ELSE '' END,
+                ',' || chr(10)
+                ORDER BY ordinal_position
+              ) ||
+              chr(10) || ')' as ddl
+       FROM information_schema.columns
+       WHERE table_schema = $1 AND table_name = $2`,
+      [schema, table]
+    )
+    return (res.rows[0]?.ddl as string) || ''
   }
 
   async getDbSizes(): Promise<Record<string, number>> {

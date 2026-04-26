@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import Editor, { DiffEditor, type OnMount } from '@monaco-editor/react'
-import { X, Play, Save, Eye, GitBranch, ShieldCheck, ShieldOff, Pencil } from 'lucide-react'
+import { X, Play, Save, Eye, GitBranch, ShieldCheck, ShieldOff, Pencil, Table2 } from 'lucide-react'
 import { useConnections } from '@renderer/context/ConnectionsContext'
 import { useScripts } from '@renderer/context/ScriptsContext'
 import { useSettings } from '@renderer/context/SettingsContext'
@@ -9,6 +9,7 @@ import ResultsGrid from '@renderer/components/results/ResultsGrid'
 import VersionsPanel from '@renderer/components/scripts/VersionsPanel'
 import NewScriptModal from '@renderer/components/scripts/NewScriptModal'
 import QueryLogPanel from './QueryLogPanel'
+import TableViewer from '@renderer/components/table/TableViewer'
 import type { QueryResult, ScriptFile, ScriptVersion } from '@shared/types'
 import type * as Monaco from 'monaco-editor'
 
@@ -26,6 +27,7 @@ interface Tab {
   diffOriginal?: string
   diffModified?: string
   isLog?: boolean
+  tableView?: { connectionId: string; database: string; table: string }
 }
 
 interface TabResult {
@@ -167,6 +169,18 @@ function detectWriteOp(sql: string): string | null {
   return null
 }
 
+// ── Cell value helpers ────────────────────────────────────────────────────────
+
+function formatCellForCompare(val: unknown): string | null {
+  if (val == null) return null
+  if (val instanceof Date) {
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${val.getFullYear()}-${pad(val.getMonth() + 1)}-${pad(val.getDate())} ${pad(val.getHours())}:${pad(val.getMinutes())}:${pad(val.getSeconds())}`
+  }
+  if (typeof val === 'object') return JSON.stringify(val)
+  return String(val)
+}
+
 // ── Editable-table helpers ────────────────────────────────────────────────────
 
 function parseEditableTable(sql: string): string | null {
@@ -206,6 +220,8 @@ interface Props {
   onOpenPalette?: () => void
   newTabTrigger?: number
   openLogTrigger?: number
+  openTableView?: { connectionId: string; database: string; table: string }
+  onOpenTableViewConsumed?: () => void
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -216,9 +232,10 @@ export default function EditorArea({
   scriptToOpen, onScriptOpened,
   scriptToRun, onScriptRun,
   onLastQueryMs, onOpenPalette,
-  newTabTrigger, openLogTrigger
+  newTabTrigger, openLogTrigger,
+  openTableView, onOpenTableViewConsumed,
 }: Props) {
-  const { activeConnectionId, activeDatabases, activeDatabase, setActiveDatabase } = useConnections()
+  const { connections, activeConnectionId, activeDatabases, activeDatabase, setActiveDatabase } = useConnections()
   const { createScript } = useScripts()
   const { monacoTheme, editorFontSize, safeMode, setSafeMode } = useSettings()
   const [tabs, setTabs] = useState<Tab[]>(() => {
@@ -238,6 +255,7 @@ export default function EditorArea({
   const [blockedOp, setBlockedOp] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
   const [editableTable, setEditableTable] = useState<string | null>(null)
+  const [editableTableDb, setEditableTableDb] = useState<string | null>(null)
   const [pkCols, setPkCols] = useState<string[]>([])
   const [pendingEdits, setPendingEdits] = useState<Map<number, Record<string, unknown>>>(new Map())
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null)
@@ -253,7 +271,7 @@ export default function EditorArea({
   useEffect(() => {
     if (saveTabsTimerRef.current) clearTimeout(saveTabsTimerRef.current)
     saveTabsTimerRef.current = setTimeout(() => {
-      const persistable = tabs.filter((t) => !t.isDiff && !t.isLog)
+      const persistable = tabs.filter((t) => !t.isDiff && !t.isLog && !t.tableView)
       const savedActive = persistable.find((t) => t.id === activeTabId)?.id
         ?? persistable[persistable.length - 1]?.id
 
@@ -411,6 +429,7 @@ export default function EditorArea({
     setEditMode(false)
     setPendingEdits(new Map())
     setEditableTable(null)
+    setEditableTableDb(null)
     setPkCols([])
   }, [activeTabId])
 
@@ -426,6 +445,27 @@ export default function EditorArea({
       return [...prev, { id, title: 'Лог запросов', content: '', isLog: true }]
     })
   }, [openLogTrigger])
+
+  // ── Open table view tab ───────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!openTableView) return
+    const { connectionId, database, table } = openTableView
+    const tabId = `table:${connectionId}:${database}.${table}`
+    setTabs((prev) => {
+      const existing = prev.find((t) => t.id === tabId)
+      if (existing) { setActiveTabId(tabId); return prev }
+      return [...prev, {
+        id: tabId,
+        title: `${database}.${table}`,
+        content: '',
+        tableView: { connectionId, database, table },
+      }]
+    })
+    setActiveTabId(tabId)
+    setBottomTab('results')
+    onOpenTableViewConsumed?.()
+  }, [openTableView]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Save version ──────────────────────────────────────────────────────────
 
@@ -474,11 +514,12 @@ export default function EditorArea({
     setBottomTab('results')
 
     try {
-      const result = await window.api.query.execute(activeConnectionId, activeDatabase, sql.trim())
+      const result = await window.api.query.execute(activeConnectionId, activeDatabase, sql.trim(), tabSnap.title ?? 'Query', tabSnap.scriptId)
       setTabResults((prev) => ({ ...prev, [tabId]: { loading: false, result } }))
       onLastQueryMs?.(result.durationMs)
       if (tabId === activeTabId) {
         setEditableTable(result.columns.length > 0 ? parseEditableTable(sql) : null)
+        setEditableTableDb(activeDatabase)
         setEditMode(false)
         setPendingEdits(new Map())
         setPkCols([])
@@ -542,19 +583,31 @@ export default function EditorArea({
   // ── Edit mode ─────────────────────────────────────────────────────────────
 
   const handleEnableEditMode = useCallback(async () => {
-    if (!editableTable || !activeConnectionId || !activeDatabase) return
+    if (!editableTable || !activeConnectionId) return
+    const connConfig = connections.find((c) => c.id === activeConnectionId)
+    const db = editableTableDb ?? activeDatabase ?? connConfig?.database ?? (activeDatabases.length === 1 ? activeDatabases[0] : null)
+    if (!db) return
     setEditMode(true)
-    const cols = await window.api.schema.columns(activeConnectionId, activeDatabase, editableTable)
+    const cols = await window.api.schema.columns(activeConnectionId, db, editableTable)
     setPkCols(cols.filter((c) => c.key === 'PRI').map((c) => c.name))
-  }, [editableTable, activeConnectionId, activeDatabase])
+  }, [editableTable, activeConnectionId, editableTableDb, activeDatabase, activeDatabases, connections])
 
   const handleCellChange = useCallback((rowIdx: number, col: string, value: string | null) => {
+    const originalVal = activeResult?.result?.rows[rowIdx]?.[col]
+    const originalStr = formatCellForCompare(originalVal)
     setPendingEdits((prev) => {
       const next = new Map(prev)
-      next.set(rowIdx, { ...(next.get(rowIdx) ?? {}), [col]: value })
+      if (value === originalStr || (value === null && originalVal == null)) {
+        const rowEdits = { ...(next.get(rowIdx) ?? {}) }
+        delete rowEdits[col]
+        if (Object.keys(rowEdits).length === 0) next.delete(rowIdx)
+        else next.set(rowIdx, rowEdits)
+      } else {
+        next.set(rowIdx, { ...(next.get(rowIdx) ?? {}), [col]: value })
+      }
       return next
     })
-  }, [])
+  }, [activeResult])
 
   const executeApply = useCallback(async () => {
     if (!activeConnectionId || !editableTable || !activeResult?.result) return
@@ -590,7 +643,7 @@ export default function EditorArea({
     setTabResults((prev) => ({ ...prev, [activeTabId]: { loading: true } }))
     try {
       for (const sql of sqls) {
-        await window.api.query.execute(activeConnectionId, activeDatabase, sql)
+        await window.api.query.execute(activeConnectionId, activeDatabase, sql, editableTable ? `${editableTable} · inline edit` : 'inline edit')
       }
       setPendingEdits(new Map())
       setEditMode(false)
@@ -680,6 +733,7 @@ export default function EditorArea({
                 }`}
             >
               {tab.isDiff && <span className="text-[#ce9178] text-[10px]">⇄</span>}
+              {tab.tableView && <Table2 size={12} className="text-[#4a9cd6] shrink-0" />}
               <span>{tab.title}</span>
               {dirty && <span className="text-[#e6db74] text-xs" title="Несохранённые изменения">●</span>}
               <button
@@ -706,7 +760,43 @@ export default function EditorArea({
       </div>
 
       {activeTab?.isLog ? (
-        <div className="flex-1 min-h-0 overflow-hidden"><QueryLogPanel /></div>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <QueryLogPanel onOpenSql={(sql) => {
+            const id = Date.now().toString()
+            setTabs((prev) => [...prev, { id, title: 'Query', content: sql }])
+            setActiveTabId(id)
+            setBottomTab('results')
+          }} />
+        </div>
+      ) : activeTab?.tableView ? (
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <TableViewer
+            connectionId={activeTab.tableView.connectionId}
+            database={activeTab.tableView.database}
+            table={activeTab.tableView.table}
+            onOpenSql={(sql) => {
+              const id = Date.now().toString()
+              setTabs((prev) => [...prev, { id, title: `DDL: ${activeTab.tableView!.table}`, content: sql }])
+              setActiveTabId(id)
+            }}
+            onNavigateToTable={(database, table) => {
+              if (!activeTab.tableView) return
+              const { connectionId } = activeTab.tableView
+              const tabId = `table:${connectionId}:${database}.${table}`
+              setTabs((prev) => {
+                const existing = prev.find((t) => t.id === tabId)
+                if (existing) { setActiveTabId(tabId); return prev }
+                return [...prev, {
+                  id: tabId,
+                  title: `${database}.${table}`,
+                  content: '',
+                  tableView: { connectionId, database, table },
+                }]
+              })
+              setActiveTabId(tabId)
+            }}
+          />
+        </div>
       ) : <>
 
       {/* Toolbar */}
@@ -860,7 +950,7 @@ export default function EditorArea({
               {activeTab?.scriptId && (
                 <TabBtn active={bottomTab === 'versions'} onClick={() => setBottomTab('versions')}>Версии</TabBtn>
               )}
-              {editableTable && activeResult?.result && !activeResult.loading && bottomTab === 'results' && (
+              {editableTable && activeResult?.result && !activeResult.loading && bottomTab === 'results' && !safeMode && (
                 <button
                   onClick={editMode
                     ? () => { setEditMode(false); setPendingEdits(new Map()) }
