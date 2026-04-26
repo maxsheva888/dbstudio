@@ -2,7 +2,7 @@
 import type {
   ConnectionConfig, TestConnectionResult,
   TableInfo, ColumnInfo, QueryResult,
-  IndexInfo, ForeignKeyInfo,
+  IndexInfo, ForeignKeyInfo, ERDTableData,
   ScriptFile, ScriptVersion, ScriptStats, ScriptSuggestions, HistoryEntry, QueryLogEntry
 } from '@shared/types'
 
@@ -26,6 +26,7 @@ declare global {
         indexes: (connectionId: string, database: string, table: string) => Promise<IndexInfo[]>
         foreignKeys: (connectionId: string, database: string, table: string) => Promise<ForeignKeyInfo[]>
         ddl: (connectionId: string, database: string, table: string) => Promise<string>
+        erd: (connectionId: string, database: string) => Promise<ERDTableData[]>
       }
       query: {
         execute: (connectionId: string, database: string | null, sql: string, sourceLabel?: string, scriptId?: string) => Promise<QueryResult>

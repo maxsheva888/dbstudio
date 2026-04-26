@@ -10,6 +10,7 @@ import VersionsPanel from '@renderer/components/scripts/VersionsPanel'
 import NewScriptModal from '@renderer/components/scripts/NewScriptModal'
 import QueryLogPanel from './QueryLogPanel'
 import TableViewer from '@renderer/components/table/TableViewer'
+import SchemaDiagramPanel from '@renderer/components/schema/diagram/SchemaDiagramPanel'
 import type { QueryResult, ScriptFile, ScriptVersion } from '@shared/types'
 import type * as Monaco from 'monaco-editor'
 
@@ -28,6 +29,7 @@ interface Tab {
   diffModified?: string
   isLog?: boolean
   tableView?: { connectionId: string; database: string; table: string }
+  schemaDiagram?: { connectionId: string; database: string }
 }
 
 interface TabResult {
@@ -220,6 +222,7 @@ interface Props {
   onOpenPalette?: () => void
   newTabTrigger?: number
   openLogTrigger?: number
+  openDiagramTrigger?: number
   openTableView?: { connectionId: string; database: string; table: string }
   onOpenTableViewConsumed?: () => void
 }
@@ -232,7 +235,7 @@ export default function EditorArea({
   scriptToOpen, onScriptOpened,
   scriptToRun, onScriptRun,
   onLastQueryMs, onOpenPalette,
-  newTabTrigger, openLogTrigger,
+  newTabTrigger, openLogTrigger, openDiagramTrigger,
   openTableView, onOpenTableViewConsumed,
 }: Props) {
   const { connections, activeConnectionId, activeDatabases, activeDatabase, setActiveDatabase } = useConnections()
@@ -271,7 +274,7 @@ export default function EditorArea({
   useEffect(() => {
     if (saveTabsTimerRef.current) clearTimeout(saveTabsTimerRef.current)
     saveTabsTimerRef.current = setTimeout(() => {
-      const persistable = tabs.filter((t) => !t.isDiff && !t.isLog && !t.tableView)
+      const persistable = tabs.filter((t) => !t.isDiff && !t.isLog && !t.tableView && !t.schemaDiagram)
       const savedActive = persistable.find((t) => t.id === activeTabId)?.id
         ?? persistable[persistable.length - 1]?.id
 
@@ -445,6 +448,27 @@ export default function EditorArea({
       return [...prev, { id, title: 'Лог запросов', content: '', isLog: true }]
     })
   }, [openLogTrigger])
+
+  // ── Open schema diagram tab ───────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!openDiagramTrigger) return
+    const connectionId = activeConnectionId
+    const database = activeDatabase
+    if (!connectionId || !database) return
+    const tabId = `diagram:${connectionId}:${database}`
+    setTabs((prev) => {
+      const existing = prev.find((t) => t.id === tabId)
+      if (existing) { setActiveTabId(tabId); return prev }
+      return [...prev, {
+        id: tabId,
+        title: `Схема · ${database}`,
+        content: '',
+        schemaDiagram: { connectionId, database },
+      }]
+    })
+    setActiveTabId(tabId)
+  }, [openDiagramTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Open table view tab ───────────────────────────────────────────────────
 
@@ -734,6 +758,13 @@ export default function EditorArea({
             >
               {tab.isDiff && <span className="text-[#ce9178] text-[10px]">⇄</span>}
               {tab.tableView && <Table2 size={12} className="text-[#4a9cd6] shrink-0" />}
+              {tab.schemaDiagram && (
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="shrink-0" style={{ color: '#007acc' }}>
+                  <rect x="2" y="2" width="5" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
+                  <rect x="9" y="10" width="5" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
+                  <path d="M7 4 H9 V12" stroke="currentColor" strokeWidth="1.2"/>
+                </svg>
+              )}
               <span>{tab.title}</span>
               {dirty && <span className="text-[#e6db74] text-xs" title="Несохранённые изменения">●</span>}
               <button
@@ -767,6 +798,18 @@ export default function EditorArea({
             setActiveTabId(id)
             setBottomTab('results')
           }} />
+        </div>
+      ) : activeTab?.schemaDiagram ? (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <SchemaDiagramPanel
+            connectionId={activeTab.schemaDiagram.connectionId}
+            database={activeTab.schemaDiagram.database}
+            onOpenInEditor={(sql) => {
+              const id = Date.now().toString()
+              setTabs((prev) => [...prev, { id, title: 'DDL', content: sql }])
+              setActiveTabId(id)
+            }}
+          />
         </div>
       ) : activeTab?.tableView ? (
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden">

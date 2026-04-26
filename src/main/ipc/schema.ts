@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { openConnection, closeConnection, listConnectedIds, getAdapter } from '../connections/registry'
 import { loadConnections } from '../connections/store'
 import { logEntry } from '../queryLog'
+import type { ERDTableData } from '../../shared/types'
 
 function findConfig(connectionId: string) {
   const conn = loadConnections().find((c) => c.id === connectionId)
@@ -55,5 +56,39 @@ export function registerSchemaHandlers(): void {
 
   ipcMain.handle('schema:ddl', async (_e, connectionId: string, database: string, table: string) => {
     return getAdapter(connectionId).getDdl(database, table)
+  })
+
+  ipcMain.handle('schema:erd', async (_e, connectionId: string, database: string): Promise<ERDTableData[]> => {
+    const adapter = getAdapter(connectionId)
+    const tables = await adapter.getTables(database)
+    const baseTables = tables.filter((t) => t.tableType === 'BASE TABLE')
+
+    const results = await Promise.all(
+      baseTables.map(async (t) => {
+        const [cols, fks] = await Promise.all([
+          adapter.getColumns(database, t.name),
+          adapter.getForeignKeys(database, t.name),
+        ])
+        const fkMap = new Map<string, string>()
+        fks.forEach((fk) => {
+          fk.columns.forEach((col, i) => {
+            fkMap.set(col, `${fk.refTable}.${fk.refColumns[i] ?? fk.refColumns[0]}`)
+          })
+        })
+        return {
+          name: t.name,
+          cols: cols.map((c) => ({
+            name: c.name,
+            type: c.type,
+            pk: c.key === 'PRI',
+            fk: fkMap.get(c.name) ?? null,
+            uq: c.key === 'UNI',
+            idx: c.key === 'MUL' && !fkMap.has(c.name),
+            nn: !c.nullable,
+          })),
+        }
+      })
+    )
+    return results
   })
 }

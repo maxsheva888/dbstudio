@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import type {
   ConnectionConfig, TestConnectionResult, TableInfo, ColumnInfo, QueryResult,
-  IndexInfo, ForeignKeyInfo,
+  IndexInfo, ForeignKeyInfo, ERDTableData,
   ScriptFile, ScriptVersion, ScriptStats, ScriptSuggestions, HistoryEntry, QueryLogEntry
 } from '../shared/types'
 
@@ -36,7 +36,9 @@ contextBridge.exposeInMainWorld('api', {
     foreignKeys: (connectionId: string, database: string, table: string): Promise<ForeignKeyInfo[]> =>
       ipcRenderer.invoke('schema:foreignKeys', connectionId, database, table),
     ddl: (connectionId: string, database: string, table: string): Promise<string> =>
-      ipcRenderer.invoke('schema:ddl', connectionId, database, table)
+      ipcRenderer.invoke('schema:ddl', connectionId, database, table),
+    erd: (connectionId: string, database: string): Promise<ERDTableData[]> =>
+      ipcRenderer.invoke('schema:erd', connectionId, database)
   },
   query: {
     execute: (connectionId: string, database: string | null, sql: string, sourceLabel?: string, scriptId?: string): Promise<QueryResult> =>

@@ -24,6 +24,7 @@ export default function App() {
   const [pendingRunSql, setPendingRunSql] = useState<string | undefined>()
   const [scriptToRun, setScriptToRun] = useState<ScriptFile | undefined>()
   const [openLogTrigger, setOpenLogTrigger] = useState(0)
+  const [openDiagramTrigger, setOpenDiagramTrigger] = useState(0)
   const [tableViewToOpen, setTableViewToOpen] = useState<{ connectionId: string; database: string; table: string } | undefined>()
 
   useEffect(() => {
@@ -53,7 +54,12 @@ export default function App() {
         <ScriptsProvider>
           <div className="flex flex-col h-screen overflow-hidden bg-vs-bg text-vs-text">
             <div className="flex flex-1 overflow-hidden min-h-0">
-              <ActivityBar activePanel={activePanel} onPanelChange={setActivePanel} onOpenLog={() => setOpenLogTrigger((n) => n + 1)} />
+              <ActivityBar
+                activePanel={activePanel}
+                onPanelChange={setActivePanel}
+                onOpenLog={() => setOpenLogTrigger((n) => n + 1)}
+                onOpenDiagram={() => setOpenDiagramTrigger((n) => n + 1)}
+              />
               <PanelGroup direction="horizontal" autoSaveId="dbstudio-layout" className="flex-1 min-w-0">
                 <Panel id="left-sidebar" defaultSize={20} minSize={10} maxSize={40} style={{ minWidth: '250px' }}>
                   <Sidebar
@@ -80,6 +86,7 @@ export default function App() {
                     onOpenPalette={() => setPaletteOpen(true)}
                     newTabTrigger={newTabTrigger}
                     openLogTrigger={openLogTrigger}
+                    openDiagramTrigger={openDiagramTrigger}
                     openTableView={tableViewToOpen}
                     onOpenTableViewConsumed={() => setTableViewToOpen(undefined)}
                   />

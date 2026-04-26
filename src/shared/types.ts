@@ -75,6 +75,23 @@ export interface ForeignKeyInfo {
   onDelete: string
 }
 
+// ── ERD / Schema Diagram ─────────────────────────────────────────────────────
+
+export interface ERDColumn {
+  name: string
+  type: string
+  pk: boolean
+  fk: string | null  // "refTable.refCol"
+  uq: boolean
+  idx: boolean
+  nn: boolean
+}
+
+export interface ERDTableData {
+  name: string
+  cols: ERDColumn[]
+}
+
 // ── Script Library ───────────────────────────────────────────────────────────
 
 export interface ScriptFile {
