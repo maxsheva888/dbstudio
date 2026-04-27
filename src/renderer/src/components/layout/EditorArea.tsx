@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import Editor, { DiffEditor, type OnMount } from '@monaco-editor/react'
-import { X, Play, Save, Eye, GitBranch, ShieldCheck, ShieldOff, Pencil, Table2 } from 'lucide-react'
+import { X, Play, Save, Eye, GitBranch, ShieldCheck, ShieldOff, Pencil, Table2, ScrollText } from 'lucide-react'
 import { useConnections } from '@renderer/context/ConnectionsContext'
 import { useScripts } from '@renderer/context/ScriptsContext'
 import { useSettings } from '@renderer/context/SettingsContext'
@@ -43,6 +43,13 @@ interface TabMeta {
   versionCount: number
   currentVersionNumber: number
   runCount: number
+}
+
+interface TableViewSavedState {
+  activeSubTab: string
+  whereClause: string
+  orderBy: string
+  limit: number
 }
 
 const DEFAULT_SQL = `-- Добро пожаловать в DBStudio
@@ -253,6 +260,7 @@ export default function EditorArea({
     loadPersistedTabs()?.tabResults ?? {}
   )
   const [tabMeta, setTabMeta] = useState<Record<string, TabMeta>>({})
+  const [tableViewStates, setTableViewStates] = useState<Record<string, TableViewSavedState>>({})
   const [bottomTab, setBottomTab] = useState<'results' | 'versions'>('results')
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [blockedOp, setBlockedOp] = useState<string | null>(null)
@@ -591,6 +599,7 @@ export default function EditorArea({
         ? { ...t, content: version.content, loadedVersionId: version.id, loadedContent: version.content }
         : t
     ))
+    editorRef.current?.setValue(version.content)
   }
 
   // ── Load + execute version ────────────────────────────────────────────────
@@ -601,6 +610,7 @@ export default function EditorArea({
         ? { ...t, content: version.content, loadedVersionId: version.id, loadedContent: version.content }
         : t
     ))
+    editorRef.current?.setValue(version.content)
     await executeQuery(version.content)
   }
 
@@ -709,6 +719,48 @@ export default function EditorArea({
     refreshMeta(tabId, { ...activeTab, scriptId: script.id, loadedVersionId: version.id })
   }, [activeTab, activeTabId, refreshMeta, createScript])
 
+  // ── Tab drag-and-drop ─────────────────────────────────────────────────────
+
+  const [draggingTabId, setDraggingTabId] = useState<string | null>(null)
+  const [dragOver, setDragOver] = useState<{ id: string; after: boolean } | null>(null)
+
+  function handleTabDragStart(e: React.DragEvent, id: string) {
+    setDraggingTabId(id)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  function handleTabDragOver(e: React.DragEvent, id: string) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (id === draggingTabId) { setDragOver(null); return }
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    setDragOver({ id, after: e.clientX > rect.left + rect.width / 2 })
+  }
+
+  function handleTabDrop(e: React.DragEvent, targetId: string) {
+    e.preventDefault()
+    const sourceId = draggingTabId
+    const after = dragOver?.after ?? false
+    setDraggingTabId(null)
+    setDragOver(null)
+    if (!sourceId || sourceId === targetId) return
+    setTabs((prev) => {
+      const from = prev.findIndex((t) => t.id === sourceId)
+      const to   = prev.findIndex((t) => t.id === targetId)
+      if (from < 0 || to < 0) return prev
+      const next = [...prev]
+      const [removed] = next.splice(from, 1)
+      const newTo = next.findIndex((t) => t.id === targetId)
+      next.splice(after ? newTo + 1 : newTo, 0, removed)
+      return next
+    })
+  }
+
+  function handleTabDragEnd() {
+    setDraggingTabId(null)
+    setDragOver(null)
+  }
+
   // ── Tab management ────────────────────────────────────────────────────────
 
   function updateContent(value: string | undefined) {
@@ -728,8 +780,14 @@ export default function EditorArea({
   useEffect(() => { executeQueryRef.current = executeQuery }, [executeQuery])
   useEffect(() => { saveVersionRef.current = () => saveCurrentVersion(activeTabId) }, [saveCurrentVersion, activeTabId])
 
+  const activeTabIdRef = useRef(activeTabId)
+  useEffect(() => { activeTabIdRef.current = activeTabId }, [activeTabId])
+
   const handleEditorMount: OnMount = (editor) => {
     editorRef.current = editor
+    // Set initial content imperatively — never use `value` prop to avoid cursor resets
+    const initTab = tabs.find((t) => t.id === activeTabIdRef.current)
+    editor.setValue(initTab?.content ?? '')
     editor.addAction({ id: 'run-query', label: 'Run Query',
       keybindings: [2051], run: () => executeQueryRef.current() })
     editor.addAction({ id: 'save-version', label: 'Save Script Version',
@@ -737,6 +795,15 @@ export default function EditorArea({
     editor.addAction({ id: 'command-palette-custom', label: 'Open Command Palette',
       keybindings: [2096], run: () => onOpenPalette?.() })
   }
+
+  // ── Sync editor content on tab switch ────────────────────────────────────
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor) return
+    const tab = tabs.find((t) => t.id === activeTabId)
+    if (!tab || tab.isDiff || tab.isLog || tab.tableView || tab.schemaDiagram) return
+    editor.setValue(tab.content ?? '')
+  }, [activeTabId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -749,17 +816,29 @@ export default function EditorArea({
           return (
             <div
               key={tab.id}
+              draggable
+              onDragStart={(e) => handleTabDragStart(e, tab.id)}
+              onDragOver={(e) => handleTabDragOver(e, tab.id)}
+              onDrop={(e) => handleTabDrop(e, tab.id)}
+              onDragEnd={handleTabDragEnd}
               onClick={() => { setActiveTabId(tab.id); if (tab.scriptId) setBottomTab('versions') }}
-              className={`flex items-center gap-1.5 px-4 h-9 text-sm cursor-pointer shrink-0 border-r border-vs-border
+              style={{
+                opacity: draggingTabId === tab.id ? 0.4 : 1,
+                boxShadow: dragOver?.id === tab.id
+                  ? (dragOver.after ? 'inset -2px 0 0 #007acc' : 'inset 2px 0 0 #007acc')
+                  : undefined,
+              }}
+              className={`flex items-center gap-1.5 px-4 h-9 text-sm cursor-pointer shrink-0 border-r border-vs-border transition-opacity
                 ${activeTabId === tab.id
                   ? 'bg-vs-tabActive text-vs-text border-t border-t-vs-statusBar'
                   : 'bg-vs-tab text-vs-textDim hover:text-vs-text'
                 }`}
             >
               {tab.isDiff && <span className="text-[#ce9178] text-[10px]">⇄</span>}
+              {tab.isLog && <ScrollText size={12} className="text-[#dcb67a] shrink-0" />}
               {tab.tableView && <Table2 size={12} className="text-[#4a9cd6] shrink-0" />}
               {tab.schemaDiagram && (
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="shrink-0" style={{ color: '#007acc' }}>
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="shrink-0" style={{ color: '#c586c0' }}>
                   <rect x="2" y="2" width="5" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
                   <rect x="9" y="10" width="5" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
                   <path d="M7 4 H9 V12" stroke="currentColor" strokeWidth="1.2"/>
@@ -817,6 +896,8 @@ export default function EditorArea({
             connectionId={activeTab.tableView.connectionId}
             database={activeTab.tableView.database}
             table={activeTab.tableView.table}
+            savedState={tableViewStates[activeTabId]}
+            onSavedStateChange={(state) => setTableViewStates((prev) => ({ ...prev, [activeTabId]: state }))}
             onOpenSql={(sql) => {
               const id = Date.now().toString()
               setTabs((prev) => [...prev, { id, title: `DDL: ${activeTab.tableView!.table}`, content: sql }])
@@ -960,7 +1041,6 @@ export default function EditorArea({
               height="100%"
               language="sql"
               theme={monacoTheme}
-              value={activeTab?.content ?? ''}
               onChange={updateContent}
               onMount={handleEditorMount}
               options={{

@@ -5,6 +5,8 @@ import { registerConnectionHandlers } from './ipc/connections'
 import { registerSchemaHandlers } from './ipc/schema'
 import { registerQueryHandlers } from './ipc/query'
 import { registerScriptsHandlers } from './ipc/scripts'
+import { registerMcpHandlers } from './ipc/mcp'
+import { startMcpServer } from './mcp/server'
 import { setPushFn, setUpdateFn, getEntries, clearEntries } from './queryLog'
 
 const isDev = process.env.NODE_ENV !== 'production'
@@ -100,6 +102,8 @@ app.whenReady().then(() => {
   registerSchemaHandlers()
   registerQueryHandlers()
   registerScriptsHandlers()
+  registerMcpHandlers()
+  startMcpServer(3742).catch((err) => console.error('[MCP] Failed to start on default port:', err))
   createWindow()
 
   app.on('activate', () => {

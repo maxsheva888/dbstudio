@@ -39,16 +39,18 @@ interface Props {
   dimmed: boolean
   highlightCols: Set<string>
   hoveredCol: { table: string; col: string } | null
+  pinnedCol: { table: string; col: string } | null
   onSelect: () => void
   onHoverCol: (v: { table: string; col: string } | null) => void
+  onColClick: (col: { table: string; col: string }) => void
   onHeaderMouseDown: (e: React.MouseEvent) => void
   onDoubleClickHeader: () => void
   onToggleExpand: () => void
 }
 
 export default function TableNode({
-  table, selected, dimmed, highlightCols, hoveredCol,
-  onSelect, onHoverCol, onHeaderMouseDown, onDoubleClickHeader, onToggleExpand,
+  table, selected, dimmed, highlightCols, hoveredCol, pinnedCol,
+  onSelect, onHoverCol, onColClick, onHeaderMouseDown, onDoubleClickHeader, onToggleExpand,
 }: Props) {
   const displayedCols = table.expanded
     ? table.cols
@@ -122,6 +124,14 @@ export default function TableNode({
         const colKey = `${table.name}.${c.name}`
         const lit = highlightCols.has(colKey)
         const isHov = hoveredCol?.table === table.name && hoveredCol?.col === c.name
+        const isPinned = pinnedCol?.table === table.name && pinnedCol?.col === c.name
+        const bg = isPinned
+          ? 'rgba(220,182,122,0.18)'
+          : isHov
+          ? '#2a2d2e'
+          : lit
+          ? 'rgba(220,182,122,0.08)'
+          : 'transparent'
         return (
           <div
             key={c.name}
@@ -129,13 +139,15 @@ export default function TableNode({
             data-rowkey={colKey}
             onMouseEnter={() => onHoverCol({ table: table.name, col: c.name })}
             onMouseLeave={() => onHoverCol(null)}
+            onClick={(e) => { e.stopPropagation(); onColClick({ table: table.name, col: c.name }) }}
             style={{
               height: ROW_H,
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '0 10px',
-              background: lit ? 'rgba(220,182,122,0.08)' : (isHov ? '#2a2d2e' : 'transparent'),
+              background: bg,
               borderTop: k === 0 ? 'none' : '1px solid #2d2d30',
               fontSize: 11,
+              cursor: 'pointer',
             }}
           >
             <ColChip col={c} />
@@ -154,6 +166,11 @@ export default function TableNode({
             }}>
               {c.type}{!c.nn && !c.pk ? '?' : ''}
             </span>
+            {isPinned && (
+              <svg width="8" height="8" viewBox="0 0 8 8" fill="none" style={{ flexShrink: 0, opacity: 0.7 }}>
+                <circle cx="4" cy="4" r="3" fill="#dcb67a"/>
+              </svg>
+            )}
           </div>
         )
       })}

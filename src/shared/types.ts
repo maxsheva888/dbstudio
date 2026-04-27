@@ -193,6 +193,22 @@ export interface TableAccessLog {
   accessedAt: number
 }
 
+// ── MCP Server ───────────────────────────────────────────────────────────────
+
+export type McpSafeMode = 'full' | 'safe' | 'read_only'
+
+export interface McpSessionInfo {
+  connectionId: string
+  database: string
+  safeMode: McpSafeMode
+}
+
+export interface McpServerStatus {
+  running: boolean
+  port: number | null
+  activeSession: McpSessionInfo | null
+}
+
 export interface HistoryEntry {
   id: string
   type: 'script' | 'anon'

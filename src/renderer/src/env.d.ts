@@ -3,7 +3,8 @@ import type {
   ConnectionConfig, TestConnectionResult,
   TableInfo, ColumnInfo, QueryResult,
   IndexInfo, ForeignKeyInfo, ERDTableData,
-  ScriptFile, ScriptVersion, ScriptStats, ScriptSuggestions, HistoryEntry, QueryLogEntry
+  ScriptFile, ScriptVersion, ScriptStats, ScriptSuggestions, HistoryEntry, QueryLogEntry,
+  McpSafeMode, McpServerStatus,
 } from '@shared/types'
 
 declare global {
@@ -55,6 +56,14 @@ declare global {
         logTableAccess: (connectionId: string, dbName: string, tableName: string) => Promise<void>
         recentTables: (connectionId: string, dbName: string, limit?: number) => Promise<string[]>
         history: (limit?: number) => Promise<HistoryEntry[]>
+      }
+      mcp: {
+        getStatus: () => Promise<McpServerStatus>
+        setEnabled: (connectionId: string, database: string, enabled: boolean) => Promise<void>
+        setSafeMode: (connectionId: string, database: string, mode: McpSafeMode) => Promise<void>
+        clearConnection: (connectionId: string) => Promise<void>
+        startServer: (port: number) => Promise<{ success: boolean; port?: number; error?: string }>
+        stopServer: () => Promise<void>
       }
     }
   }

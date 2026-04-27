@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import type { CanvasTable } from './types'
 
 interface Props {
@@ -10,6 +10,11 @@ interface Props {
 
 export default function SchemaSidebar({ tables, selected, onSelect, hoveredTable }: Props) {
   const [query, setQuery] = useState('')
+  const selectedItemRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    selectedItemRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [selected])
   const filtered = query
     ? tables.filter((t) => t.name.toLowerCase().includes(query.toLowerCase()))
     : tables
@@ -68,6 +73,7 @@ export default function SchemaSidebar({ tables, selected, onSelect, hoveredTable
           return (
             <div
               key={t.name}
+              ref={isSel ? selectedItemRef : undefined}
               onClick={() => onSelect(t.name)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,

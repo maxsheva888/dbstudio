@@ -2,7 +2,8 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import type {
   ConnectionConfig, TestConnectionResult, TableInfo, ColumnInfo, QueryResult,
   IndexInfo, ForeignKeyInfo, ERDTableData,
-  ScriptFile, ScriptVersion, ScriptStats, ScriptSuggestions, HistoryEntry, QueryLogEntry
+  ScriptFile, ScriptVersion, ScriptStats, ScriptSuggestions, HistoryEntry, QueryLogEntry,
+  McpSafeMode, McpServerStatus,
 } from '../shared/types'
 
 contextBridge.exposeInMainWorld('api', {
@@ -61,6 +62,20 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.on('queryLog:entryUpdate', listener)
       return () => ipcRenderer.removeListener('queryLog:entryUpdate', listener)
     },
+  },
+  mcp: {
+    getStatus: (): Promise<McpServerStatus> =>
+      ipcRenderer.invoke('mcp:getStatus'),
+    setEnabled: (connectionId: string, database: string, enabled: boolean): Promise<void> =>
+      ipcRenderer.invoke('mcp:setEnabled', connectionId, database, enabled),
+    setSafeMode: (connectionId: string, database: string, mode: McpSafeMode): Promise<void> =>
+      ipcRenderer.invoke('mcp:setSafeMode', connectionId, database, mode),
+    clearConnection: (connectionId: string): Promise<void> =>
+      ipcRenderer.invoke('mcp:clearConnection', connectionId),
+    startServer: (port: number): Promise<{ success: boolean; port?: number; error?: string }> =>
+      ipcRenderer.invoke('mcp:startServer', port),
+    stopServer: (): Promise<void> =>
+      ipcRenderer.invoke('mcp:stopServer'),
   },
   scripts: {
     list: (): Promise<ScriptFile[]> =>

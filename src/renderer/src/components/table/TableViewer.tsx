@@ -11,6 +11,8 @@ interface Props {
   connectionId: string
   database: string
   table: string
+  savedState?: { activeSubTab: string; whereClause: string; orderBy: string; limit: number }
+  onSavedStateChange?: (state: { activeSubTab: string; whereClause: string; orderBy: string; limit: number }) => void
 }
 
 type TabKey = 'structure' | 'data' | 'indexes' | 'fk' | 'ddl'
@@ -352,23 +354,28 @@ interface DataTabProps {
   isProtected: boolean
   pendingEdits: PendingEdits
   refreshTrigger: number
+  initialWhereClause?: string
+  initialOrderBy?: string
+  initialLimit?: number
   onCellChange: (rowIdx: number, col: string, value: string | null) => void
   onRevertCell: (rowIdx: number, col: string) => void
   onResultChange: (result: QueryResult | undefined) => void
+  onFilterStateChange?: (state: { whereClause: string; orderBy: string; limit: number }) => void
   onSave: () => void
 }
 
 function DataTab({
   connectionId, database, table, pkCols,
   isProtected, pendingEdits, refreshTrigger,
-  onCellChange, onRevertCell, onResultChange, onSave,
+  initialWhereClause = '', initialOrderBy = '', initialLimit = 200,
+  onCellChange, onRevertCell, onResultChange, onFilterStateChange, onSave,
 }: DataTabProps) {
   const [result, setResult] = useState<QueryResult | undefined>()
   const [error, setError] = useState<string | undefined>()
   const [loading, setLoading] = useState(true)
-  const [whereClause, setWhereClause] = useState('')
-  const [orderBy, setOrderBy] = useState('')
-  const [limit, setLimit] = useState(200)
+  const [whereClause, setWhereClause] = useState(initialWhereClause)
+  const [orderBy, setOrderBy] = useState(initialOrderBy)
+  const [limit, setLimit] = useState(initialLimit)
   const inputRef = useRef<HTMLInputElement>(null)
   const runQueryRef = useRef<() => Promise<void>>(async () => {})
 
@@ -395,6 +402,7 @@ function DataTab({
   useEffect(() => { runQueryRef.current = runQuery }, [runQuery])
   useEffect(() => { runQuery() }, [])
   useEffect(() => { if (refreshTrigger > 0) runQueryRef.current() }, [refreshTrigger])
+  useEffect(() => { onFilterStateChange?.({ whereClause, orderBy, limit }) }, [whereClause, orderBy, limit]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ctrl/Cmd+S
   useEffect(() => {
@@ -773,11 +781,12 @@ function DdlTab({ ddl, database, table, onOpenInEditor }: {
 
 // ── Main TableViewer ────────────────────────────────────────────────────────
 
-export default function TableViewer({ connectionId, database, table, onOpenSql, onNavigateToTable }: Props & {
+export default function TableViewer({ connectionId, database, table, savedState, onSavedStateChange, onOpenSql, onNavigateToTable }: Props & {
   onOpenSql?: (sql: string) => void
   onNavigateToTable?: (database: string, table: string) => void
 }) {
-  const [tab, setTab] = useState<TabKey>('structure')
+  const [tab, setTab] = useState<TabKey>((savedState?.activeSubTab as TabKey) ?? 'structure')
+  const filterStateRef = useRef({ whereClause: savedState?.whereClause ?? '', orderBy: savedState?.orderBy ?? '', limit: savedState?.limit ?? 200 })
   const [columns, setColumns] = useState<ColumnInfo[]>([])
   const [indexes, setIndexes] = useState<IndexInfo[]>([])
   const [fks, setFks] = useState<ForeignKeyInfo[]>([])
@@ -936,7 +945,10 @@ export default function TableViewer({ connectionId, database, table, onOpenSql, 
           return (
             <button
               key={t.k}
-              onClick={() => setTab(t.k)}
+              onClick={() => {
+                setTab(t.k)
+                onSavedStateChange?.({ activeSubTab: t.k, ...filterStateRef.current })
+              }}
               className={`text-[11px] py-2 border-b-2 transition-colors whitespace-nowrap ${
                 active ? 'text-vs-text border-vs-accent' : 'text-vs-textDim border-transparent hover:text-vs-text'
               }`}
@@ -972,7 +984,10 @@ export default function TableViewer({ connectionId, database, table, onOpenSql, 
       {/* tab content */}
       <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
         {tab === 'structure' && <StructureTab columns={columns} />}
-        {tab === 'data' && (
+        <div
+          className="flex flex-col flex-1 min-h-0 overflow-hidden"
+          style={{ display: tab === 'data' ? undefined : 'none' }}
+        >
           <DataTab
             connectionId={connectionId}
             database={database}
@@ -981,12 +996,19 @@ export default function TableViewer({ connectionId, database, table, onOpenSql, 
             isProtected={isProtected}
             pendingEdits={pendingEdits}
             refreshTrigger={refreshTrigger}
+            initialWhereClause={savedState?.whereClause}
+            initialOrderBy={savedState?.orderBy}
+            initialLimit={savedState?.limit}
             onCellChange={handleCellChange}
             onRevertCell={handleRevertCell}
             onResultChange={handleResultChange}
+            onFilterStateChange={(s) => {
+              filterStateRef.current = s
+              onSavedStateChange?.({ activeSubTab: tab, ...s })
+            }}
             onSave={handleSave}
           />
-        )}
+        </div>
         {tab === 'indexes' && <IndexesTab indexes={indexes} />}
         {tab === 'fk' && (
           <ForeignKeysTab

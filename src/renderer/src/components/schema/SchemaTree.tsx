@@ -1,10 +1,11 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import {
   Database, Table2, ChevronRight, ChevronDown,
-  KeyRound, Key, Link2, Hash, Columns3, Loader2, Eye
+  KeyRound, Key, Link2, Hash, Columns3, Loader2, Eye, Plug2,
 } from 'lucide-react'
 import { useConnections } from '@renderer/context/ConnectionsContext'
-import type { TableInfo, ColumnInfo } from '@shared/types'
+import { useMcp } from '@renderer/context/McpContext'
+import type { TableInfo, ColumnInfo, McpSafeMode } from '@shared/types'
 
 interface DbState {
   loading: boolean
@@ -51,8 +52,17 @@ function lsJson<T>(key: string, fallback: T): T {
 function dbLsKey(connId: string)    { return `dbstudio:expandedDbs:${connId}` }
 function tableLsKey(connId: string) { return `dbstudio:expandedTables:${connId}` }
 
+const SAFE_MODE_LABELS: Record<McpSafeMode, string> = {
+  read_only: 'READ',
+  safe: 'SAFE',
+  full: 'FULL',
+}
+
+const SAFE_MODE_CYCLE: McpSafeMode[] = ['read_only', 'safe', 'full']
+
 export default function SchemaTree({ onTableSelect }: Props) {
   const { activeConnectionId, activeDatabases, activeDatabase, setActiveDatabase } = useConnections()
+  const { isEnabled, enableDb, disableDb, setSafeMode, activeSession } = useMcp()
   const [dbStates, setDbStates] = useState<Record<string, DbState>>({})
   const [tableStates, setTableStates] = useState<Record<string, TableState>>({})
   const [dbSizes, setDbSizes] = useState<Record<string, number>>({})
@@ -198,11 +208,13 @@ export default function SchemaTree({ onTableSelect }: Props) {
         const isActive = db === activeDatabase
         const isSystem = SYSTEM_DBS.has(db)
         const dbTotalSize = dbSizes[db] ?? 0
+        const mcpOn = !isSystem && activeConnectionId ? isEnabled(activeConnectionId, db) : false
+        const curSafeMode = mcpOn && activeSession ? activeSession.safeMode : 'read_only'
         return (
           <div key={db}>
             <div style={{ position: 'sticky', top: 0, zIndex: 2, backgroundColor: '#1a1a1c' }}>
             <div
-              className={`flex items-center gap-1 px-2 py-0.5 cursor-pointer rounded mx-1
+              className={`flex items-center gap-1 px-2 py-0.5 cursor-pointer rounded mx-1 group
                 ${isActive ? 'bg-vs-selected text-white' : 'hover:bg-vs-hover'}
                 ${isSystem && !isActive ? 'opacity-40' : ''}`}
               onClick={() => { setActiveDatabase(db); toggleDb(db) }}
@@ -219,6 +231,44 @@ export default function SchemaTree({ onTableSelect }: Props) {
                 <span className={`text-[10px] font-mono tabular-nums shrink-0 ${isActive ? 'opacity-70' : sizeTextClass(dbTotalSize)}`}>
                   {fmtBytes(dbTotalSize)}
                 </span>
+              )}
+              {/* MCP controls */}
+              {!isSystem && activeConnectionId && (
+                <div
+                  className={`flex items-center gap-0.5 shrink-0 ml-0.5 transition-opacity ${mcpOn ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    title={mcpOn ? 'MCP включён — нажмите чтобы отключить' : 'Включить MCP для этой базы'}
+                    onClick={() => mcpOn ? disableDb(activeConnectionId, db) : enableDb(activeConnectionId, db)}
+                    className={`flex items-center justify-center w-4 h-4 rounded transition-colors ${mcpOn ? 'text-[#4ec9b0] hover:text-[#f48771]' : 'text-vs-textDim hover:text-[#4ec9b0]'}`}
+                  >
+                    <Plug2 size={10} />
+                  </button>
+                  {mcpOn && (
+                    <button
+                      title={
+                        curSafeMode === 'read_only'
+                          ? 'READ — только SELECT/SHOW/DESCRIBE\nAgент не может изменять данные\n\nНажмите для смены режима'
+                          : curSafeMode === 'safe'
+                          ? 'SAFE — чтение и запись разрешены\nЗаблокировано: DROP, TRUNCATE, ALTER TABLE,\nDELETE без WHERE\n\nНажмите для смены режима'
+                          : 'FULL — все запросы разрешены\nАгент имеет полный доступ к базе\n\nНажмите для смены режима'
+                      }
+                      onClick={() => {
+                        const cycle: McpSafeMode[] = ['read_only', 'safe', 'full']
+                        const idx = cycle.indexOf(curSafeMode)
+                        setSafeMode(cycle[(idx + 1) % cycle.length])
+                      }}
+                      className="text-[8px] font-mono font-bold px-1 rounded leading-none h-4 flex items-center transition-colors"
+                      style={{
+                        background: curSafeMode === 'read_only' ? 'rgba(86,156,214,0.2)' : curSafeMode === 'safe' ? 'rgba(78,201,176,0.2)' : 'rgba(244,135,113,0.2)',
+                        color: curSafeMode === 'read_only' ? '#569cd6' : curSafeMode === 'safe' ? '#4ec9b0' : '#f48771',
+                      }}
+                    >
+                      {curSafeMode === 'read_only' ? 'READ' : curSafeMode === 'safe' ? 'SAFE' : 'FULL'}
+                    </button>
+                  )}
+                </div>
               )}
             </div>
             </div>

@@ -71,6 +71,7 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
 
   const disconnect = useCallback(async (id: string) => {
     await window.api.schema.disconnect(id).catch(() => {})
+    window.api.mcp.clearConnection(id).catch(() => {})
     setOpenConnectionIds((prev) => prev.filter((x) => x !== id))
     if (activeConnectionId === id) {
       setActiveConnectionId(null)

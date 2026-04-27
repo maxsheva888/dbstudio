@@ -6,16 +6,18 @@ interface Settings {
   theme: Theme
   editorFontSize: number
   safeMode: boolean
+  mcpPort: number
 }
 
 interface SettingsContextValue extends Settings {
   setTheme: (t: Theme) => void
   setEditorFontSize: (n: number) => void
   setSafeMode: (v: boolean) => void
+  setMcpPort: (port: number) => void
   monacoTheme: string
 }
 
-const DEFAULTS: Settings = { theme: 'dark', editorFontSize: 14, safeMode: true }
+const DEFAULTS: Settings = { theme: 'dark', editorFontSize: 14, safeMode: true, mcpPort: 3742 }
 
 function load(): Settings {
   try {
@@ -60,13 +62,18 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setSettings((s) => ({ ...s, safeMode }))
   }, [])
 
+  const setMcpPort = useCallback((mcpPort: number) => {
+    setSettings((s) => ({ ...s, mcpPort }))
+  }, [])
+
   return (
     <SettingsContext.Provider value={{
       ...settings,
       monacoTheme: settings.theme === 'light' ? 'vs' : 'vs-dark',
       setTheme,
       setEditorFontSize,
-      setSafeMode
+      setSafeMode,
+      setMcpPort,
     }}>
       {children}
     </SettingsContext.Provider>

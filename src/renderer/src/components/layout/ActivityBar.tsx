@@ -40,18 +40,18 @@ export default function ActivityBar({ activePanel, onPanelChange, onOpenLog, onO
               {item.icon}
             </button>
           ))}
+          <button
+            title="Диаграмма схемы"
+            onClick={onOpenDiagram}
+            className="flex items-center justify-center w-12 h-12 mt-1 text-vs-textDim hover:text-vs-text transition-colors border-l-2 border-transparent"
+          >
+            <svg width="20" height="20" viewBox="0 0 16 16" fill="none">
+              <rect x="2" y="2" width="5" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
+              <rect x="9" y="10" width="5" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
+              <path d="M7 4 H9 V12" stroke="currentColor" strokeWidth="1.2" fill="none"/>
+            </svg>
+          </button>
         </div>
-        <button
-          title="Диаграмма схемы"
-          onClick={onOpenDiagram}
-          className="flex items-center justify-center w-12 h-12 text-vs-textDim hover:text-vs-text transition-colors"
-        >
-          <svg width="20" height="20" viewBox="0 0 16 16" fill="none">
-            <rect x="2" y="2" width="5" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
-            <rect x="9" y="10" width="5" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
-            <path d="M7 4 H9 V12" stroke="currentColor" strokeWidth="1.2" fill="none"/>
-          </svg>
-        </button>
         <button
           title="Лог запросов"
           onClick={onOpenLog}
