@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import i18n, { type Language } from '@renderer/i18n'
 
 export type Theme = 'dark' | 'light'
 
@@ -7,6 +8,7 @@ interface Settings {
   editorFontSize: number
   safeMode: boolean
   mcpPort: number
+  language: Language
 }
 
 interface SettingsContextValue extends Settings {
@@ -14,10 +16,11 @@ interface SettingsContextValue extends Settings {
   setEditorFontSize: (n: number) => void
   setSafeMode: (v: boolean) => void
   setMcpPort: (port: number) => void
+  setLanguage: (l: Language) => void
   monacoTheme: string
 }
 
-const DEFAULTS: Settings = { theme: 'dark', editorFontSize: 14, safeMode: true, mcpPort: 3742 }
+const DEFAULTS: Settings = { theme: 'dark', editorFontSize: 14, safeMode: true, mcpPort: 3742, language: 'en' }
 
 function load(): Settings {
   try {
@@ -47,6 +50,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     } else {
       root.classList.remove('light')
     }
+    i18n.changeLanguage(settings.language)
     persist(settings)
   }, [settings])
 
@@ -66,6 +70,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setSettings((s) => ({ ...s, mcpPort }))
   }, [])
 
+  const setLanguage = useCallback((language: Language) => {
+    setSettings((s) => ({ ...s, language }))
+  }, [])
+
   return (
     <SettingsContext.Provider value={{
       ...settings,
@@ -74,6 +82,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       setEditorFontSize,
       setSafeMode,
       setMcpPort,
+      setLanguage,
     }}>
       {children}
     </SettingsContext.Provider>

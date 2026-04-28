@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react'
 import { Sun, Moon, X, Copy, Check } from 'lucide-react'
 import { useSettings } from '@renderer/context/SettingsContext'
 import { useMcp } from '@renderer/context/McpContext'
+import { LANGUAGES } from '@renderer/i18n'
 
 interface Props {
   onClose: () => void
@@ -23,7 +24,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 export default function SettingsModal({ onClose }: Props) {
-  const { theme, setTheme, editorFontSize, setEditorFontSize, mcpPort, setMcpPort } = useSettings()
+  const { theme, setTheme, editorFontSize, setEditorFontSize, mcpPort, setMcpPort, language, setLanguage } = useSettings()
   const { serverRunning, serverPort, activeSession, restartServer } = useMcp()
   const [portInput, setPortInput] = useState(String(mcpPort))
   const [portError, setPortError] = useState<string | null>(null)
@@ -83,6 +84,29 @@ export default function SettingsModal({ onClose }: Props) {
                 label="Светлая"
                 onClick={() => setTheme('light')}
               />
+            </div>
+          </div>
+
+          {/* Language */}
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-semibold uppercase tracking-wide text-vs-textDim">
+              Language / Язык / Język
+            </label>
+            <div className="flex gap-2">
+              {LANGUAGES.map((lang) => (
+                <button
+                  key={lang.code}
+                  onClick={() => setLanguage(lang.code)}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded border text-sm transition-colors ${
+                    language === lang.code
+                      ? 'bg-[#007acc] text-white border-[#007acc]'
+                      : 'bg-vs-input text-vs-textDim border-vs-border hover:text-vs-text hover:border-vs-textDim'
+                  }`}
+                >
+                  <span>{lang.flag}</span>
+                  <span>{lang.label}</span>
+                </button>
+              ))}
             </div>
           </div>
 
