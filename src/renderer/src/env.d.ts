@@ -1,4 +1,12 @@
 /// <reference types="vite/client" />
+
+type UpdaterEvent =
+  | { type: 'checking' }
+  | { type: 'available'; version: string }
+  | { type: 'not-available' }
+  | { type: 'downloading'; percent: number }
+  | { type: 'ready'; version: string }
+  | { type: 'error'; message: string }
 import type {
   ConnectionConfig, TestConnectionResult,
   TableInfo, ColumnInfo, QueryResult,
@@ -10,6 +18,15 @@ import type {
 declare global {
   interface Window {
     api: {
+      app: {
+        getVersion: () => Promise<string>
+      }
+      updater?: {
+        onEvent?: (cb: (event: UpdaterEvent) => void) => (() => void)
+        download: () => Promise<void>
+        install: () => Promise<void>
+        check: () => Promise<void>
+      }
       connections: {
         list: () => Promise<ConnectionConfig[]>
         save: (config: ConnectionConfig) => Promise<void>

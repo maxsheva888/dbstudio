@@ -6,6 +6,14 @@ import type {
   McpSafeMode, McpServerStatus,
 } from '../shared/types'
 
+type UpdaterEvent =
+  | { type: 'checking' }
+  | { type: 'available'; version: string }
+  | { type: 'not-available' }
+  | { type: 'downloading'; percent: number }
+  | { type: 'ready'; version: string }
+  | { type: 'error'; message: string }
+
 contextBridge.exposeInMainWorld('api', {
   connections: {
     list: (): Promise<ConnectionConfig[]> =>
@@ -76,6 +84,19 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.invoke('mcp:startServer', port),
     stopServer: (): Promise<void> =>
       ipcRenderer.invoke('mcp:stopServer'),
+  },
+  app: {
+    getVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
+  },
+  updater: {
+    onEvent: (cb: (event: UpdaterEvent) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, event: UpdaterEvent) => cb(event)
+      ipcRenderer.on('update:event', listener)
+      return () => ipcRenderer.removeListener('update:event', listener)
+    },
+    download: (): Promise<void> => ipcRenderer.invoke('update:download'),
+    install: (): Promise<void> => ipcRenderer.invoke('update:install'),
+    check: (): Promise<void> => ipcRenderer.invoke('update:check'),
   },
   connection: {
     onLost: (cb: (connectionId: string) => void): (() => void) => {

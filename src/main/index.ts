@@ -1,6 +1,7 @@
 import { app, BrowserWindow, shell, ipcMain, screen } from 'electron'
 import { join } from 'path'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
+import { autoUpdater } from 'electron-updater'
 import { registerConnectionHandlers } from './ipc/connections'
 import { registerSchemaHandlers } from './ipc/schema'
 import { registerQueryHandlers } from './ipc/query'
@@ -77,6 +78,7 @@ function createWindow(): void {
       if (!mainWindow.isDestroyed()) mainWindow.webContents.send('queryLog:entryUpdate', entry)
     })
     startKeepalive(mainWindow)
+    setupAutoUpdater(mainWindow)
   })
 
   mainWindow.on('close', () => saveWindowState(mainWindow))
@@ -94,9 +96,41 @@ function createWindow(): void {
   }
 }
 
+function setupAutoUpdater(win: BrowserWindow): void {
+  if (!app.isPackaged) return  // skip in dev mode
+
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = true
+
+  autoUpdater.on('checking-for-update', () =>
+    win.webContents.send('update:event', { type: 'checking' }))
+
+  autoUpdater.on('update-available', (info) =>
+    win.webContents.send('update:event', { type: 'available', version: info.version }))
+
+  autoUpdater.on('update-not-available', () =>
+    win.webContents.send('update:event', { type: 'not-available' }))
+
+  autoUpdater.on('download-progress', (p) =>
+    win.webContents.send('update:event', { type: 'downloading', percent: Math.round(p.percent) }))
+
+  autoUpdater.on('update-downloaded', (info) =>
+    win.webContents.send('update:event', { type: 'ready', version: info.version }))
+
+  autoUpdater.on('error', (err) =>
+    win.webContents.send('update:event', { type: 'error', message: err.message }))
+
+  ipcMain.handle('update:download', () => autoUpdater.downloadUpdate().catch(() => {}))
+  ipcMain.handle('update:install', () => { autoUpdater.quitAndInstall(); })
+  ipcMain.handle('update:check', () => autoUpdater.checkForUpdates().catch(() => {}))
+
+  setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 5000)
+}
+
 app.whenReady().then(() => {
   if (process.platform === 'win32') app.setAppUserModelId('com.dbstudio')
 
+  ipcMain.handle('app:version', () => app.getVersion())
   ipcMain.handle('queryLog:get', () => getEntries())
   ipcMain.handle('queryLog:clear', () => clearEntries())
 

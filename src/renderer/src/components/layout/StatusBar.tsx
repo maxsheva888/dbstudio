@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { WifiOff, Database } from 'lucide-react'
 import { useConnections } from '@renderer/context/ConnectionsContext'
 import { useTags } from '@renderer/context/TagsContext'
@@ -7,7 +7,17 @@ interface Props {
   lastQueryMs?: number | null
 }
 
+function useUpdater() {
+  const [event, setEvent] = useState<UpdaterEvent | null>(null)
+  useEffect(() => {
+    const unsub = window.api.updater?.onEvent?.(setEvent)
+    return unsub
+  }, [])
+  return event
+}
+
 export default function StatusBar({ lastQueryMs }: Props) {
+  const updateEvent = useUpdater()
   const { connections, activeConnectionId, activeDatabase, lostConnectionIds, reconnect } = useConnections()
   const { getTag } = useTags()
   const active = connections.find((c) => c.id === activeConnectionId)
@@ -75,7 +85,34 @@ export default function StatusBar({ lastQueryMs }: Props) {
           </span>
         )}
       </div>
-      <span className="opacity-70">DBStudio v0.1.0</span>
+      <div className="flex items-center gap-2">
+        {updateEvent?.type === 'available' && (
+          <button
+            onClick={() => window.api.updater.download()}
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold animate-pulse"
+            style={{ background: 'rgba(78,201,176,0.2)', color: '#4ec9b0', border: '1px solid rgba(78,201,176,0.4)' }}
+            title={`Доступна версия ${updateEvent.version}`}
+          >
+            ↑ v{updateEvent.version} — Скачать
+          </button>
+        )}
+        {updateEvent?.type === 'downloading' && (
+          <span className="text-[10px] opacity-70" style={{ color: '#4ec9b0' }}>
+            Загрузка {updateEvent.percent}%…
+          </span>
+        )}
+        {updateEvent?.type === 'ready' && (
+          <button
+            onClick={() => window.api.updater.install()}
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold"
+            style={{ background: 'rgba(78,201,176,0.3)', color: '#4ec9b0', border: '1px solid rgba(78,201,176,0.6)' }}
+            title={`Версия ${updateEvent.version} готова к установке`}
+          >
+            ↑ v{updateEvent.version} — Установить и перезапустить
+          </button>
+        )}
+        <span className="opacity-70">DBStudio v0.1.0</span>
+      </div>
     </div>
   )
 }
