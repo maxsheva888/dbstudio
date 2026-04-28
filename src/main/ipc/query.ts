@@ -1,5 +1,6 @@
-import { ipcMain } from 'electron'
-import { getAdapter, getConfig } from '../connections/registry'
+import { ipcMain, BrowserWindow } from 'electron'
+import { getAdapter, getConfig, closeConnection } from '../connections/registry'
+import { isConnectionLostError } from '../connections/keepalive'
 import {
   logEntry, updateEntry, getEntries,
   isTx, trackTx, deriveKind, computeGrade, computeHints,
@@ -65,7 +66,8 @@ export function registerQueryHandlers(): void {
       database: string | null,
       sql: string,
       sourceLabel = 'Query',
-      scriptId?: string
+      scriptId?: string,
+      skipLog?: boolean
     ): Promise<QueryResult> => {
       const trimmed = sql.trim()
       if (!trimmed) throw new Error('Empty query')
@@ -86,14 +88,25 @@ export function registerQueryHandlers(): void {
         const grade = computeGrade(durationMs, undefined, kind)
         const hints = computeHints(trimmed, kind, durationMs, rowCount)
 
-        logEntry({ sql: trimmed, connectionId, database, durationMs, error: null, rowCount, ranAt, kind, status, sourceLabel, scriptId, user, tx, grade, hints })
+        if (!skipLog) {
+          logEntry({ sql: trimmed, connectionId, database, durationMs, error: null, rowCount, ranAt, kind, status, sourceLabel, scriptId, user, tx, grade, hints })
+        }
         return result
       } catch (err) {
         const durationMs = Date.now() - ranAt
         const grade = computeGrade(durationMs, undefined, kind)
         const hints = computeHints(trimmed, kind, durationMs, null)
 
-        logEntry({ sql: trimmed, connectionId, database, durationMs, error: (err as Error).message, rowCount: null, ranAt, kind, status: 'error', sourceLabel, scriptId, user, tx, grade, hints })
+        if (!skipLog) {
+          logEntry({ sql: trimmed, connectionId, database, durationMs, error: (err as Error).message, rowCount: null, ranAt, kind, status: 'error', sourceLabel, scriptId, user, tx, grade, hints })
+        }
+
+        if (isConnectionLostError(err)) {
+          try { await closeConnection(connectionId) } catch {}
+          const win = BrowserWindow.getAllWindows()[0]
+          if (win && !win.isDestroyed()) win.webContents.send('connection:lost', connectionId)
+        }
+
         throw err
       }
     }

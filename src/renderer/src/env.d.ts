@@ -30,7 +30,7 @@ declare global {
         erd: (connectionId: string, database: string) => Promise<ERDTableData[]>
       }
       query: {
-        execute: (connectionId: string, database: string | null, sql: string, sourceLabel?: string, scriptId?: string) => Promise<QueryResult>
+        execute: (connectionId: string, database: string | null, sql: string, sourceLabel?: string, scriptId?: string, skipLog?: boolean) => Promise<QueryResult>
       }
       queryLog: {
         get: () => Promise<QueryLogEntry[]>
@@ -38,6 +38,9 @@ declare global {
         clear: () => Promise<void>
         onEntry: (cb: (entry: QueryLogEntry) => void) => (() => void)
         onEntryUpdate: (cb: (entry: QueryLogEntry) => void) => (() => void)
+      }
+      connection?: {
+        onLost?: (cb: (connectionId: string) => void) => (() => void)
       }
       scripts: {
         list: () => Promise<ScriptFile[]>

@@ -2,7 +2,7 @@ import mysql from 'mysql2/promise'
 import type { ConnectionConfig, QueryResult, TableInfo, ColumnInfo, IndexInfo, ForeignKeyInfo, TestConnectionResult } from '../../shared/types'
 import type { DatabaseAdapter } from './adapter'
 
-const MAX_ROWS = 2000
+const MAX_ROWS = 10000
 
 export class MySQLAdapter implements DatabaseAdapter {
   private pools = new Map<string, mysql.Pool>()
@@ -40,10 +40,12 @@ export class MySQLAdapter implements DatabaseAdapter {
 
     if (Array.isArray(result)) {
       const rows = result as mysql.RowDataPacket[]
+      const truncated = rows.length > MAX_ROWS
       return {
         columns: (fields ?? []).map((f) => f.name),
         rows: rows.slice(0, MAX_ROWS).map((r) => ({ ...r })),
         rowCount: rows.length,
+        truncated: truncated || undefined,
         durationMs
       }
     }

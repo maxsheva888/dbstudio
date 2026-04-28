@@ -3,7 +3,7 @@ import { statSync } from 'fs'
 import type { ConnectionConfig, QueryResult, TableInfo, ColumnInfo, IndexInfo, ForeignKeyInfo } from '../../shared/types'
 import type { DatabaseAdapter } from './adapter'
 
-const MAX_ROWS = 2000
+const MAX_ROWS = 10000
 
 export class SQLiteAdapter implements DatabaseAdapter {
   private db: Database.Database
@@ -24,10 +24,12 @@ export class SQLiteAdapter implements DatabaseAdapter {
       const s = this.db.prepare(stmt)
       if (s.reader) {
         const rows = s.all() as Record<string, unknown>[]
+        const truncated = rows.length > MAX_ROWS
         last = {
           columns: rows.length > 0 ? Object.keys(rows[0]) : [],
           rows: rows.slice(0, MAX_ROWS),
           rowCount: rows.length,
+          truncated: truncated || undefined,
           durationMs: Date.now() - start
         }
       } else {

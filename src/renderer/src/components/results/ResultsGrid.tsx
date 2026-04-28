@@ -1,6 +1,9 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { X, Copy, Check } from 'lucide-react'
 import type { QueryResult } from '@shared/types'
+
+const ROW_H = 25
+const OVERSCAN = 20
 
 interface Props {
   result?: QueryResult
@@ -11,6 +14,10 @@ interface Props {
   pendingEdits?: Map<number, Record<string, unknown>>
   onCellChange?: (rowIdx: number, col: string, value: string | null) => void
   onRevertCell?: (rowIdx: number, col: string) => void
+  page?: number
+  totalRows?: number
+  pageSize?: number
+  onPageChange?: (page: number) => void
 }
 
 // ─── type helpers ──────────────────────────────────────────────────────────
@@ -496,8 +503,24 @@ function InlineEditCell({
 
 // ─── Main ──────────────────────────────────────────────────────────────────
 
-export default function ResultsGrid({ result, error, loading, editMode, pkCols = [], pendingEdits, onCellChange, onRevertCell }: Props) {
+export default function ResultsGrid({ result, error, loading, editMode, pkCols = [], pendingEdits, onCellChange, onRevertCell, page = 0, totalRows, pageSize = 10000, onPageChange }: Props) {
   const [activeCell, setActiveCell] = useState<CellInfo | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [scrollTop, setScrollTop] = useState(0)
+  const [viewHeight, setViewHeight] = useState(800)
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const obs = new ResizeObserver(() => setViewHeight(el.clientHeight))
+    obs.observe(el)
+    setViewHeight(el.clientHeight)
+    return () => obs.disconnect()
+  }, [result])
+
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    setScrollTop(e.currentTarget.scrollTop)
+  }, [])
 
   if (loading) {
     return (
@@ -538,15 +561,48 @@ export default function ResultsGrid({ result, error, loading, editMode, pkCols =
           </span>
         ) : (
           <span>
-            Строк: <strong className="text-[#9cdcfe]">{result.rowCount}</strong>
-            {result.rowCount === 2000 && (
-              <span className="ml-1 text-[#ce9178]">(лимит 2000)</span>
+            Строк: <strong className="text-[#9cdcfe]">{result.rows.length}</strong>
+            {result.truncated && !onPageChange && (
+              <span className="ml-1 text-[#ce9178]">(показано {result.rows.length.toLocaleString()} из {result.rowCount.toLocaleString()} — добавьте LIMIT)</span>
             )}
           </span>
         )}
         <span>
           Время: <strong className="text-[#9cdcfe]">{result.durationMs} мс</strong>
         </span>
+        {!isDml && onPageChange && (totalRows !== undefined || page > 0) && (() => {
+          const totalPages = totalRows !== undefined ? Math.ceil(totalRows / pageSize) : null
+          const hasPrev = page > 0
+          const hasNext = result.rows.length >= pageSize || (totalRows !== undefined && (page + 1) * pageSize < totalRows)
+          return (
+            <div className="flex items-center gap-1 ml-auto">
+              {totalRows !== undefined && (
+                <span className="mr-1 text-vs-textDim">
+                  всего: <strong className="text-[#9cdcfe]">{totalRows.toLocaleString()}</strong>
+                </span>
+              )}
+              <button
+                onClick={() => onPageChange(page - 1)}
+                disabled={!hasPrev}
+                className="px-1.5 py-0.5 rounded hover:bg-vs-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                title="Предыдущая страница"
+              >
+                ‹
+              </button>
+              <span className="px-1 select-none">
+                {page + 1}{totalPages !== null ? ` / ${totalPages}` : ''}
+              </span>
+              <button
+                onClick={() => onPageChange(page + 1)}
+                disabled={!hasNext}
+                className="px-1.5 py-0.5 rounded hover:bg-vs-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                title="Следующая страница"
+              >
+                ›
+              </button>
+            </div>
+          )
+        })()}
       </div>
 
       {isDml && (
@@ -555,82 +611,94 @@ export default function ResultsGrid({ result, error, loading, editMode, pkCols =
         </div>
       )}
 
-      {!isDml && (
-        <div className="flex-1 overflow-auto selectable">
-          <table className="w-full text-xs border-collapse">
-            <thead className="sticky top-0 z-10">
-              <tr className="bg-vs-panelHeader">
-                <th className="w-10 px-2 py-1.5 text-right text-vs-textDim border-b border-r border-vs-border font-normal select-none">
-                  #
-                </th>
-                {result.columns.map((col) => (
-                  <th
-                    key={col}
-                    className="px-2 py-1.5 text-left text-[#9cdcfe] border-b border-r border-vs-border font-medium whitespace-nowrap"
-                  >
-                    {col}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {result.rows.map((row, i) => {
-                const rowEdits = pendingEdits?.get(i)
-                const rowDirty = rowEdits && Object.keys(rowEdits).length > 0
-                return (
-                  <tr key={i} className={`border-b border-vs-border ${rowDirty ? 'bg-[#c586c008]' : 'hover:bg-vs-hover'}`}>
-                    <td className={`px-2 py-1 text-right text-vs-textDim border-r border-vs-border select-none relative ${rowDirty ? 'bg-[#c586c018]' : ''}`}>
-                      {rowDirty && <span className="absolute top-0 bottom-0 left-0 w-[2px] bg-[#c586c0]" />}
-                      {i + 1}
-                    </td>
-                    {result.columns.map((col) => {
-                      const val = row[col]
-                      const pendingVal = rowEdits?.[col]
-                      const isPk = pkCols.includes(col)
-                      const display = val == null
-                        ? null
-                        : val instanceof Date ? formatDate(val)
-                        : typeof val === 'object' ? JSON.stringify(val) : String(val)
+      {!isDml && (() => {
+        const visibleRows = result.rows.length
+        const startIdx = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN)
+        const endIdx = Math.min(visibleRows, Math.ceil((scrollTop + viewHeight) / ROW_H) + OVERSCAN)
+        const paddingTop = startIdx * ROW_H
+        const paddingBottom = (visibleRows - endIdx) * ROW_H
+        const colSpan = result.columns.length + 1
 
-                      if (editMode) {
+        return (
+          <div ref={scrollRef} className="flex-1 overflow-auto selectable" onScroll={handleScroll}>
+            <table className="w-full text-xs border-collapse">
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-vs-panelHeader">
+                  <th className="w-10 px-2 py-1.5 text-right text-vs-textDim border-b border-r border-vs-border font-normal select-none">
+                    #
+                  </th>
+                  {result.columns.map((col) => (
+                    <th
+                      key={col}
+                      className="px-2 py-1.5 text-left text-[#9cdcfe] border-b border-r border-vs-border font-medium whitespace-nowrap"
+                    >
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {paddingTop > 0 && <tr style={{ height: paddingTop }}><td colSpan={colSpan} /></tr>}
+                {result.rows.slice(startIdx, endIdx).map((row, relIdx) => {
+                  const i = startIdx + relIdx
+                  const rowEdits = pendingEdits?.get(i)
+                  const rowDirty = rowEdits && Object.keys(rowEdits).length > 0
+                  return (
+                    <tr key={i} className={`border-b border-vs-border ${rowDirty ? 'bg-[#c586c008]' : 'hover:bg-vs-hover'}`}>
+                      <td className={`px-2 py-1 text-right text-vs-textDim border-r border-vs-border select-none relative ${rowDirty ? 'bg-[#c586c018]' : ''}`}>
+                        {rowDirty && <span className="absolute top-0 bottom-0 left-0 w-[2px] bg-[#c586c0]" />}
+                        {page * pageSize + i + 1}
+                      </td>
+                      {result.columns.map((col) => {
+                        const val = row[col]
+                        const pendingVal = rowEdits?.[col]
+                        const isPk = pkCols.includes(col)
+                        const display = val == null
+                          ? null
+                          : val instanceof Date ? formatDate(val)
+                          : typeof val === 'object' ? JSON.stringify(val) : String(val)
+
+                        if (editMode) {
+                          return (
+                            <td
+                              key={col}
+                              className={`px-2 py-1 border-r border-vs-border max-w-xs ${pendingVal !== undefined ? 'overflow-visible' : 'overflow-hidden'} ${isPk ? 'cursor-default' : 'cursor-text'} ${pendingVal !== undefined ? 'bg-[#c586c010]' : ''}`}
+                            >
+                              <InlineEditCell
+                                column={col}
+                                originalVal={val}
+                                pendingVal={pendingVal}
+                                isPk={isPk}
+                                onCommit={(v) => onCellChange?.(i, col, v)}
+                                onRevert={() => onRevertCell?.(i, col)}
+                              />
+                            </td>
+                          )
+                        }
+
                         return (
                           <td
                             key={col}
-                            className={`px-2 py-1 border-r border-vs-border max-w-xs ${pendingVal !== undefined ? 'overflow-visible' : 'overflow-hidden'} ${isPk ? 'cursor-default' : 'cursor-text'} ${pendingVal !== undefined ? 'bg-[#c586c010]' : ''}`}
+                            onDoubleClick={() => setActiveCell({ column: col, value: val })}
+                            className="px-2 py-1 text-vs-text border-r border-vs-border max-w-xs truncate cursor-default"
+                            title={display ?? 'NULL'}
                           >
-                            <InlineEditCell
-                              column={col}
-                              originalVal={val}
-                              pendingVal={pendingVal}
-                              isPk={isPk}
-                              onCommit={(v) => onCellChange?.(i, col, v)}
-                              onRevert={() => onRevertCell?.(i, col)}
-                            />
+                            {display == null
+                              ? <span className="text-vs-textDim italic">NULL</span>
+                              : display
+                            }
                           </td>
                         )
-                      }
-
-                      return (
-                        <td
-                          key={col}
-                          onDoubleClick={() => setActiveCell({ column: col, value: val })}
-                          className="px-2 py-1 text-vs-text border-r border-vs-border max-w-xs truncate cursor-default"
-                          title={display ?? 'NULL'}
-                        >
-                          {display == null
-                            ? <span className="text-vs-textDim italic">NULL</span>
-                            : display
-                          }
-                        </td>
-                      )
-                    })}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+                      })}
+                    </tr>
+                  )
+                })}
+                {paddingBottom > 0 && <tr style={{ height: paddingBottom }}><td colSpan={colSpan} /></tr>}
+              </tbody>
+            </table>
+          </div>
+        )
+      })()}
 
       {activeCell && (
         <CellModal cell={activeCell} onClose={() => setActiveCell(null)} />

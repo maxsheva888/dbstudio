@@ -156,6 +156,7 @@ interface ConnCardProps {
   active: boolean
   connected: boolean
   connecting: boolean
+  lost?: boolean
   onSelect: () => void
   onConnect: (e: React.MouseEvent) => void
   onDisconnect: (e: React.MouseEvent) => void
@@ -172,7 +173,7 @@ interface ConnCardProps {
 }
 
 function ConnCard({
-  conn, active, connected, connecting,
+  conn, active, connected, connecting, lost,
   onSelect, onConnect, onDisconnect, onEdit, onDelete,
   onTableSelect,
   draggable: isDraggable, onDragStart, onDragOver, onDrop, onDragEnd,
@@ -252,10 +253,22 @@ function ConnCard({
         {subtitle}
       </div>
 
-      {/* Row 3: env tags + ssh badge */}
+      {/* Row 3: env tags + ssh badge + lost badge */}
       <div style={{ marginTop: 5, display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
         <EnvTag tagKeys={conn.tags} />
         {conn.ssh && <SshBadge />}
+        {lost && (
+          <span title="Соединение потеряно" style={{
+            display: 'inline-flex', alignItems: 'center', gap: 3,
+            background: '#3a1a1a', color: '#f48771',
+            padding: '1px 5px', borderRadius: 3,
+            fontSize: 9, fontFamily: 'monospace', fontWeight: 700,
+            letterSpacing: 0.4, lineHeight: 1.4, flexShrink: 0,
+          }}>
+            <span style={{ width: 4, height: 4, borderRadius: 999, background: '#f48771' }} />
+            ПОТЕРЯНО
+          </span>
+        )}
       </div>
 
       {/* Always-visible connect/disconnect button + edit/delete */}
@@ -368,7 +381,7 @@ function ConnectionsPanel({
   onEdit: (c: ConnectionConfig) => void
   onTableSelect?: (connectionId: string, database: string, table: string) => void
 }) {
-  const { connections, activeConnectionId, openConnectionIds, deleteConnection, connect, disconnect } = useConnections()
+  const { connections, activeConnectionId, openConnectionIds, lostConnectionIds, deleteConnection, connect, disconnect, reconnect } = useConnections()
   const [connecting, setConnecting] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'local' | 'dev' | 'prod'>('all')
   const [order, setOrder] = useState<string[]>([])
@@ -385,10 +398,11 @@ function ConnectionsPanel({
   }, [connections])
 
   async function handleConnect(conn: ConnectionConfig) {
-    if (activeConnectionId === conn.id) return
+    if (activeConnectionId === conn.id && !lostConnectionIds.includes(conn.id)) return
     setConnecting(conn.id)
-    try { await connect(conn.id) }
-    finally { setConnecting(null) }
+    try {
+      lostConnectionIds.includes(conn.id) ? await reconnect(conn.id) : await connect(conn.id)
+    } finally { setConnecting(null) }
   }
 
   async function handleDisconnect(e: React.MouseEvent, id: string) {
@@ -495,10 +509,17 @@ function ConnectionsPanel({
               letterSpacing: 0.7, fontWeight: 700, textTransform: 'uppercase',
               display: 'flex', alignItems: 'center', gap: 6,
             }}>
-              <span style={{
-                width: 5, height: 5, borderRadius: 999, background: '#4ec9b0',
-                boxShadow: '0 0 0 2px #4ec9b030', flexShrink: 0,
-              }} />
+              {lostConnectionIds.includes(activeConn.id) ? (
+                <span style={{
+                  width: 5, height: 5, borderRadius: 999, background: '#f48771',
+                  boxShadow: '0 0 0 2px #f4877130', flexShrink: 0,
+                }} />
+              ) : (
+                <span style={{
+                  width: 5, height: 5, borderRadius: 999, background: '#4ec9b0',
+                  boxShadow: '0 0 0 2px #4ec9b030', flexShrink: 0,
+                }} />
+              )}
               текущее подключение
             </div>
             <ConnCard
@@ -506,6 +527,7 @@ function ConnectionsPanel({
               active={true}
               connected={openConnectionIds.includes(activeConn.id)}
               connecting={connecting === activeConn.id}
+              lost={lostConnectionIds.includes(activeConn.id)}
               onSelect={() => {}}
               onConnect={(e) => { e.stopPropagation(); void handleConnect(activeConn) }}
               onDisconnect={(e) => void handleDisconnect(e, activeConn.id)}
@@ -536,6 +558,7 @@ function ConnectionsPanel({
                 active={false}
                 connected={openConnectionIds.includes(c.id)}
                 connecting={connecting === c.id}
+                lost={lostConnectionIds.includes(c.id)}
                 onSelect={() => void handleConnect(c)}
                 onConnect={(e) => { e.stopPropagation(); void handleConnect(c) }}
                 onDisconnect={(e) => void handleDisconnect(e, c.id)}

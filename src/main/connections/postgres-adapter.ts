@@ -5,7 +5,7 @@ import type { DatabaseAdapter } from './adapter'
 const SYSTEM_SCHEMAS = new Set([
   'pg_catalog', 'information_schema', 'pg_toast', 'pg_temp_1', 'pg_toast_temp_1'
 ])
-const MAX_ROWS = 2000
+const MAX_ROWS = 10000
 
 export class PostgresAdapter implements DatabaseAdapter {
   private _pool: Pool | null = null
@@ -45,7 +45,8 @@ export class PostgresAdapter implements DatabaseAdapter {
       const columns = (res.fields ?? []).map((f) => f.name)
       if (columns.length > 0) {
         const rows = (res.rows ?? []) as Record<string, unknown>[]
-        return { columns, rows: rows.slice(0, MAX_ROWS), rowCount: rows.length, durationMs }
+        const truncated = rows.length > MAX_ROWS
+        return { columns, rows: rows.slice(0, MAX_ROWS), rowCount: rows.length, truncated: truncated || undefined, durationMs }
       }
       return { columns: [], rows: [], rowCount: 0, affectedRows: res.rowCount ?? 0, durationMs }
     } finally {

@@ -37,6 +37,9 @@ interface TabResult {
   error?: string
   loading: boolean
   cachedAt?: number  // set only when result is restored from localStorage
+  page?: number
+  totalRows?: number
+  originalSql?: string
 }
 
 interface TabMeta {
@@ -245,7 +248,7 @@ export default function EditorArea({
   newTabTrigger, openLogTrigger, openDiagramTrigger,
   openTableView, onOpenTableViewConsumed,
 }: Props) {
-  const { connections, activeConnectionId, activeDatabases, activeDatabase, setActiveDatabase } = useConnections()
+  const { connections, activeConnectionId, activeDatabases, activeDatabase, setActiveDatabase, lostConnectionIds, reconnect } = useConnections()
   const { createScript } = useScripts()
   const { monacoTheme, editorFontSize, safeMode, setSafeMode } = useSettings()
   const [tabs, setTabs] = useState<Tab[]>(() => {
@@ -547,7 +550,13 @@ export default function EditorArea({
 
     try {
       const result = await window.api.query.execute(activeConnectionId, activeDatabase, sql.trim(), tabSnap.title ?? 'Query', tabSnap.scriptId)
-      setTabResults((prev) => ({ ...prev, [tabId]: { loading: false, result } }))
+      setTabResults((prev) => ({ ...prev, [tabId]: {
+        loading: false,
+        result,
+        page: 0,
+        originalSql: sql.trim(),
+        totalRows: result.truncated ? result.rowCount : undefined,
+      } }))
       onLastQueryMs?.(result.durationMs)
       if (tabId === activeTabId) {
         setEditableTable(result.columns.length > 0 ? parseEditableTable(sql) : null)
@@ -577,6 +586,34 @@ export default function EditorArea({
       }
     }
   }, [activeConnectionId, activeDatabase, activeTab, activeTabId, onLastQueryMs, refreshMeta])
+
+  // ── Paginate SQL editor results ───────────────────────────────────────────
+
+  const PAGE_SIZE = 10000
+
+  const executeQueryPage = useCallback(async (targetPage: number) => {
+    if (!activeConnectionId || !activeResult?.originalSql) return
+    const baseSql = activeResult.originalSql.replace(/;+\s*$/, '')
+    const pagedSql = `SELECT * FROM (${baseSql}) _dbstudio_p LIMIT ${PAGE_SIZE} OFFSET ${targetPage * PAGE_SIZE}`
+    setTabResults((prev) => ({ ...prev, [activeTabId]: { ...prev[activeTabId], loading: true } }))
+    try {
+      const result = await window.api.query.execute(activeConnectionId, activeDatabase, pagedSql, 'Query', undefined, true)
+      setTabResults((prev) => ({
+        ...prev,
+        [activeTabId]: {
+          ...prev[activeTabId],
+          loading: false,
+          result,
+          page: targetPage,
+        },
+      }))
+    } catch (e) {
+      setTabResults((prev) => ({
+        ...prev,
+        [activeTabId]: { ...prev[activeTabId], loading: false, error: e instanceof Error ? e.message : String(e) },
+      }))
+    }
+  }, [activeConnectionId, activeDatabase, activeTabId, activeResult])
 
   // ── Run SQL from history (opens new tab + executes) ──────────────────────
 
@@ -1109,17 +1146,41 @@ export default function EditorArea({
                 </button>
               </div>
             )}
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden flex flex-col">
+              {bottomTab === 'results' && activeResult?.result && !activeResult.loading &&
+                activeConnectionId && lostConnectionIds.includes(activeConnectionId) && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-[#3a1a1a] border-b border-[#6e2828] shrink-0 text-xs">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="shrink-0 text-[#f48771]">
+                    <path d="M6 1 L11 10 H1 Z" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinejoin="round" />
+                    <path d="M6 5 V7.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                    <circle cx="6" cy="9" r="0.5" fill="currentColor" />
+                  </svg>
+                  <span className="text-[#f48771]">Соединение потеряно — данные устарели</span>
+                  <button
+                    onClick={() => activeConnectionId && reconnect(activeConnectionId)}
+                    className="ml-1 px-2 py-0.5 rounded text-[10px] font-semibold"
+                    style={{ background: 'rgba(244,135,113,0.15)', color: '#f48771', border: '1px solid rgba(244,135,113,0.3)' }}
+                  >
+                    Переподключить
+                  </button>
+                </div>
+              )}
               {bottomTab === 'results' && (
-                <ResultsGrid
-                  result={activeResult?.result}
-                  error={activeResult?.error}
-                  loading={activeResult?.loading}
-                  editMode={editMode}
-                  pkCols={pkCols}
-                  pendingEdits={pendingEdits}
-                  onCellChange={handleCellChange}
-                />
+                <div className="flex-1 overflow-hidden">
+                  <ResultsGrid
+                    result={activeResult?.result}
+                    error={activeResult?.error}
+                    loading={activeResult?.loading}
+                    editMode={editMode}
+                    pkCols={pkCols}
+                    pendingEdits={pendingEdits}
+                    onCellChange={handleCellChange}
+                    page={activeResult?.page ?? 0}
+                    totalRows={activeResult?.totalRows}
+                    pageSize={PAGE_SIZE}
+                    onPageChange={activeResult?.originalSql ? executeQueryPage : undefined}
+                  />
+                </div>
               )}
               {bottomTab === 'versions' && activeTab?.scriptId && (
                 <VersionsPanel

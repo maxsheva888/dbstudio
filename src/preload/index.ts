@@ -42,8 +42,8 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.invoke('schema:erd', connectionId, database)
   },
   query: {
-    execute: (connectionId: string, database: string | null, sql: string, sourceLabel?: string, scriptId?: string): Promise<QueryResult> =>
-      ipcRenderer.invoke('query:execute', connectionId, database, sql, sourceLabel, scriptId)
+    execute: (connectionId: string, database: string | null, sql: string, sourceLabel?: string, scriptId?: string, skipLog?: boolean): Promise<QueryResult> =>
+      ipcRenderer.invoke('query:execute', connectionId, database, sql, sourceLabel, scriptId, skipLog)
   },
   queryLog: {
     get: (): Promise<QueryLogEntry[]> =>
@@ -76,6 +76,13 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.invoke('mcp:startServer', port),
     stopServer: (): Promise<void> =>
       ipcRenderer.invoke('mcp:stopServer'),
+  },
+  connection: {
+    onLost: (cb: (connectionId: string) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, connectionId: string) => cb(connectionId)
+      ipcRenderer.on('connection:lost', listener)
+      return () => ipcRenderer.removeListener('connection:lost', listener)
+    },
   },
   scripts: {
     list: (): Promise<ScriptFile[]> =>

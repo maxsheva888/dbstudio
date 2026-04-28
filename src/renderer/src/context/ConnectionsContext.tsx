@@ -5,6 +5,7 @@ interface ConnectionsContextValue {
   connections: ConnectionConfig[]
   activeConnectionId: string | null
   openConnectionIds: string[]
+  lostConnectionIds: string[]
   activeDatabases: string[]
   activeDatabase: string | null
   reload: () => Promise<void>
@@ -12,6 +13,7 @@ interface ConnectionsContextValue {
   deleteConnection: (id: string) => Promise<void>
   connect: (id: string) => Promise<void>
   disconnect: (id: string) => Promise<void>
+  reconnect: (id: string) => Promise<void>
   setActiveDatabase: (db: string | null) => void
 }
 
@@ -29,6 +31,7 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
   const [connections, setConnections] = useState<ConnectionConfig[]>([])
   const [activeConnectionId, setActiveConnectionId] = useState<string | null>(null)
   const [openConnectionIds, setOpenConnectionIds] = useState<string[]>([])
+  const [lostConnectionIds, setLostConnectionIds] = useState<string[]>([])
   const [activeDatabases, setActiveDatabases] = useState<string[]>([])
   const [activeDatabase, setActiveDatabaseState] = useState<string | null>(null)
 
@@ -73,6 +76,7 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
     await window.api.schema.disconnect(id).catch(() => {})
     window.api.mcp.clearConnection(id).catch(() => {})
     setOpenConnectionIds((prev) => prev.filter((x) => x !== id))
+    setLostConnectionIds((prev) => prev.filter((x) => x !== id))
     if (activeConnectionId === id) {
       setActiveConnectionId(null)
       setActiveDatabases([])
@@ -83,10 +87,23 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
     }
   }, [activeConnectionId])
 
+  const reconnect = useCallback(async (id: string) => {
+    setLostConnectionIds((prev) => prev.filter((x) => x !== id))
+    await connect(id)
+  }, [connect])
+
   const setActiveDatabase = useCallback((db: string | null) => {
     setActiveDatabaseState(db)
     if (db) localStorage.setItem(LS_ACTIVE_DB, db)
     else localStorage.removeItem(LS_ACTIVE_DB)
+  }, [])
+
+  useEffect(() => {
+    const unsubLost = window.api.connection?.onLost?.((connectionId) => {
+      setOpenConnectionIds((prev) => prev.filter((x) => x !== connectionId))
+      setLostConnectionIds((prev) => prev.includes(connectionId) ? prev : [...prev, connectionId])
+    })
+    return unsubLost
   }, [])
 
   useEffect(() => {
@@ -131,9 +148,9 @@ export function ConnectionsProvider({ children }: { children: React.ReactNode })
 
   return (
     <ConnectionsContext.Provider value={{
-      connections, activeConnectionId, openConnectionIds, activeDatabases, activeDatabase,
+      connections, activeConnectionId, openConnectionIds, lostConnectionIds, activeDatabases, activeDatabase,
       reload, saveConnection, deleteConnection,
-      connect, disconnect, setActiveDatabase
+      connect, disconnect, reconnect, setActiveDatabase
     }}>
       {children}
     </ConnectionsContext.Provider>

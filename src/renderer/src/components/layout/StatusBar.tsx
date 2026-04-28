@@ -8,11 +8,12 @@ interface Props {
 }
 
 export default function StatusBar({ lastQueryMs }: Props) {
-  const { connections, activeConnectionId, activeDatabase } = useConnections()
+  const { connections, activeConnectionId, activeDatabase, lostConnectionIds, reconnect } = useConnections()
   const { getTag } = useTags()
   const active = connections.find((c) => c.id === activeConnectionId)
+  const isLost = activeConnectionId ? lostConnectionIds.includes(activeConnectionId) : false
   const firstTag = active?.tags?.[0] ? getTag(active.tags[0]) : undefined
-  const bgColor = firstTag ? firstTag.color : 'var(--vs-status-bar)'
+  const bgColor = isLost ? '#5a1a1a' : (firstTag ? firstTag.color : 'var(--vs-status-bar)')
 
   const subtitle = active
     ? active.type === 'sqlite'
@@ -26,7 +27,20 @@ export default function StatusBar({ lastQueryMs }: Props) {
       style={{ backgroundColor: bgColor }}
     >
       <div className="flex items-center gap-3">
-        {active ? (
+        {active && isLost ? (
+          <>
+            <WifiOff size={12} className="text-[#f48771]" />
+            <span className="text-[#f48771] font-medium">Соединение потеряно</span>
+            <span className="opacity-60">— {active.name}</span>
+            <button
+              onClick={() => reconnect(active.id)}
+              className="ml-1 px-2 py-0.5 rounded text-[10px] font-semibold"
+              style={{ background: 'rgba(244,135,113,0.2)', color: '#f48771', border: '1px solid rgba(244,135,113,0.35)' }}
+            >
+              Переподключить
+            </button>
+          </>
+        ) : active ? (
           <>
             {firstTag && (
               <span style={{

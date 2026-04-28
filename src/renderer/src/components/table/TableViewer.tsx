@@ -376,10 +376,12 @@ function DataTab({
   const [whereClause, setWhereClause] = useState(initialWhereClause)
   const [orderBy, setOrderBy] = useState(initialOrderBy)
   const [limit, setLimit] = useState(initialLimit)
+  const [page, setPage] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
-  const runQueryRef = useRef<() => Promise<void>>(async () => {})
+  const runQueryRef = useRef<(p?: number) => Promise<void>>(async () => {})
 
-  const runQuery = useCallback(async () => {
+  const runQuery = useCallback(async (targetPage?: number) => {
+    const p = targetPage ?? page
     setLoading(true)
     setError(undefined)
     try {
@@ -387,8 +389,8 @@ function DataTab({
       let sql = `SELECT * FROM ${quotedTbl}`
       if (whereClause.trim()) sql += ` WHERE ${whereClause}`
       if (orderBy.trim()) sql += ` ORDER BY ${orderBy}`
-      sql += ` LIMIT ${limit}`
-      const r = await window.api.query.execute(connectionId, database, sql, `${table} · Данные`)
+      sql += ` LIMIT ${limit} OFFSET ${p * limit}`
+      const r = await window.api.query.execute(connectionId, database, sql, `${table} · Данные`, undefined, true)
       setResult(r)
       onResultChange(r)
     } catch (e) {
@@ -397,12 +399,17 @@ function DataTab({
     } finally {
       setLoading(false)
     }
-  }, [connectionId, database, table, whereClause, orderBy, limit, onResultChange])
+  }, [connectionId, database, table, whereClause, orderBy, limit, page, onResultChange])
 
   useEffect(() => { runQueryRef.current = runQuery }, [runQuery])
-  useEffect(() => { runQuery() }, [])
-  useEffect(() => { if (refreshTrigger > 0) runQueryRef.current() }, [refreshTrigger])
+  useEffect(() => { runQuery() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (refreshTrigger > 0) { setPage(0); runQueryRef.current(0) } }, [refreshTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setPage(0) }, [limit]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { onFilterStateChange?.({ whereClause, orderBy, limit }) }, [whereClause, orderBy, limit]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleRefresh() { setPage(0); runQuery(0) }
+  function handleEnter() { setPage(0); runQuery(0) }
+  function goToPage(np: number) { setPage(np); runQuery(np) }
 
   // Ctrl/Cmd+S
   useEffect(() => {
@@ -424,7 +431,8 @@ function DataTab({
     ])
   )
 
-  const rowCount = result?.rowCount ?? 0
+  const rowCount = result?.rows.length ?? 0
+  const hasNextPage = rowCount >= limit
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
@@ -435,7 +443,7 @@ function DataTab({
           ref={inputRef}
           value={whereClause}
           onChange={(e) => setWhereClause(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') runQuery() }}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleEnter() }}
           placeholder="id = 1  или  name LIKE '%foo%'"
           className="flex-1 max-w-[340px] h-[22px] bg-vs-input border border-vs-border rounded px-2 font-mono text-[11px] text-vs-text placeholder:text-vs-textMuted outline-none focus:border-vs-accent"
         />
@@ -443,7 +451,7 @@ function DataTab({
         <input
           value={orderBy}
           onChange={(e) => setOrderBy(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') runQuery() }}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleEnter() }}
           placeholder="id DESC"
           className="w-[130px] h-[22px] bg-vs-input border border-vs-border rounded px-2 font-mono text-[11px] text-vs-text placeholder:text-vs-textMuted outline-none focus:border-vs-accent"
         />
@@ -454,12 +462,34 @@ function DataTab({
           onChange={(e) => setLimit(Number(e.target.value))}
           className="h-[22px] bg-vs-input border border-vs-border rounded px-1 font-mono text-[11px] text-vs-text outline-none"
         >
-          {[50, 100, 200, 500, 1000].map((n) => (
+          {[50, 100, 200, 500, 1000, 5000].map((n) => (
             <option key={n} value={n}>{n}</option>
           ))}
         </select>
+        {/* pagination */}
+        <div className="flex items-center gap-0.5">
+          <button
+            onClick={() => goToPage(page - 1)}
+            disabled={page === 0 || loading}
+            className="h-[22px] w-[22px] flex items-center justify-center rounded text-vs-textDim hover:text-vs-text hover:bg-vs-hover disabled:opacity-30 disabled:cursor-default transition-colors"
+            title="Предыдущая страница"
+          >
+            ‹
+          </button>
+          <span className="text-vs-textDim font-mono text-[10px] px-1 min-w-[28px] text-center">
+            {page + 1}
+          </span>
+          <button
+            onClick={() => goToPage(page + 1)}
+            disabled={!hasNextPage || loading}
+            className="h-[22px] w-[22px] flex items-center justify-center rounded text-vs-textDim hover:text-vs-text hover:bg-vs-hover disabled:opacity-30 disabled:cursor-default transition-colors"
+            title="Следующая страница"
+          >
+            ›
+          </button>
+        </div>
         <button
-          onClick={runQuery}
+          onClick={handleRefresh}
           className="h-[22px] px-2.5 rounded bg-vs-accent text-white text-[10px] font-medium hover:opacity-80 flex items-center gap-1"
         >
           <RefreshCw size={10} />

@@ -8,6 +8,7 @@ import { registerScriptsHandlers } from './ipc/scripts'
 import { registerMcpHandlers } from './ipc/mcp'
 import { startMcpServer } from './mcp/server'
 import { setPushFn, setUpdateFn, getEntries, clearEntries } from './queryLog'
+import { startKeepalive } from './connections/keepalive'
 
 const isDev = process.env.NODE_ENV !== 'production'
 
@@ -75,6 +76,7 @@ function createWindow(): void {
     setUpdateFn((entry) => {
       if (!mainWindow.isDestroyed()) mainWindow.webContents.send('queryLog:entryUpdate', entry)
     })
+    startKeepalive(mainWindow)
   })
 
   mainWindow.on('close', () => saveWindowState(mainWindow))
