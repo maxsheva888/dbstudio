@@ -70,7 +70,7 @@ function createWindow(): void {
   mainWindow.on('ready-to-show', () => {
     if (saved.maximized) mainWindow.maximize()
     mainWindow.show()
-    if (isDev) mainWindow.webContents.openDevTools({ mode: 'detach' })
+    if (!app.isPackaged) mainWindow.webContents.openDevTools({ mode: 'detach' })
     setPushFn((entry) => {
       if (!mainWindow.isDestroyed()) mainWindow.webContents.send('queryLog:entry', entry)
     })
