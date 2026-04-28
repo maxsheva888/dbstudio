@@ -20,6 +20,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# TypeScript build cache
+*.tsbuildinfo
+
 # Logs
 *.log
 npm-debug.log*
