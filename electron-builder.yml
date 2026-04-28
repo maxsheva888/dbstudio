@@ -1,0 +1,29 @@
+appId: com.dbstudio.app
+productName: DBStudio
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out/**/*
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!docs/*'
+  - '!electron.vite.config.*'
+  - '!{tsconfig.json,tsconfig.*}'
+  - '!{.env,.env.*}'
+publish:
+  provider: github
+  owner: maxsheva888
+  repo: dbstudio
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+  executableName: DBStudio
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
