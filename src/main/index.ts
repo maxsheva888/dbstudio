@@ -120,10 +120,6 @@ function setupAutoUpdater(win: BrowserWindow): void {
   autoUpdater.on('error', (err) =>
     win.webContents.send('update:event', { type: 'error', message: err.message }))
 
-  ipcMain.handle('update:download', () => autoUpdater.downloadUpdate().catch(() => {}))
-  ipcMain.handle('update:install', () => { autoUpdater.quitAndInstall(); })
-  ipcMain.handle('update:check', () => autoUpdater.checkForUpdates().catch(() => {}))
-
   setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 5000)
 }
 
@@ -133,6 +129,9 @@ app.whenReady().then(() => {
   ipcMain.handle('app:version', () => app.getVersion())
   ipcMain.handle('queryLog:get', () => getEntries())
   ipcMain.handle('queryLog:clear', () => clearEntries())
+  ipcMain.handle('update:download', () => autoUpdater.downloadUpdate().catch(() => {}))
+  ipcMain.handle('update:install', () => { autoUpdater.quitAndInstall() })
+  ipcMain.handle('update:check', () => autoUpdater.checkForUpdates().catch(() => {}))
 
   registerConnectionHandlers()
   registerSchemaHandlers()
