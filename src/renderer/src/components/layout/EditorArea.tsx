@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import Editor, { DiffEditor, type OnMount } from '@monaco-editor/react'
 import { X, Play, Save, Eye, GitBranch, ShieldCheck, ShieldOff, Pencil, Table2, ScrollText } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useConnections } from '@renderer/context/ConnectionsContext'
 import { useScripts } from '@renderer/context/ScriptsContext'
 import { useSettings } from '@renderer/context/SettingsContext'
@@ -112,12 +113,12 @@ function loadPersistedTabs(): {
   } catch { return null }
 }
 
-function cachedSince(ts: number): string {
+function cachedSince(ts: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
   const d = Date.now() - ts
-  if (d < 60_000) return 'только что'
-  if (d < 3_600_000) return `${Math.floor(d / 60_000)} мин`
-  if (d < 86_400_000) return `${Math.floor(d / 3_600_000)} ч`
-  return `${Math.floor(d / 86_400_000)} дн`
+  if (d < 60_000) return t('editor.cacheJustNow')
+  if (d < 3_600_000) return t('editor.cacheMins', { n: Math.floor(d / 60_000) })
+  if (d < 86_400_000) return t('editor.cacheHours', { n: Math.floor(d / 3_600_000) })
+  return t('editor.cacheDays', { n: Math.floor(d / 86_400_000) })
 }
 
 function simpleHash(s: string): number {
@@ -126,10 +127,10 @@ function simpleHash(s: string): number {
   return h >>> 0
 }
 
-function scopeLabel(scope: string): string {
-  if (scope === 'global') return 'Глобальный'
-  if (scope.startsWith('db:')) return `БД: ${scope.slice(3)}`
-  if (scope.startsWith('table:')) return `Таблица: ${scope.slice(6)}`
+function scopeLabel(scope: string, t: (key: string) => string): string {
+  if (scope === 'global') return t('scripts.scopeGlobal')
+  if (scope.startsWith('db:')) return `${t('scripts.scopeDb')}: ${scope.slice(3)}`
+  if (scope.startsWith('table:')) return `${t('scripts.scopeTable')}: ${scope.slice(6)}`
   return scope
 }
 
@@ -248,6 +249,7 @@ export default function EditorArea({
   newTabTrigger, openLogTrigger, openDiagramTrigger,
   openTableView, onOpenTableViewConsumed,
 }: Props) {
+  const { t } = useTranslation()
   const { connections, activeConnectionId, activeDatabases, activeDatabase, setActiveDatabase, lostConnectionIds, reconnect } = useConnections()
   const { createScript } = useScripts()
   const { monacoTheme, editorFontSize, safeMode, setSafeMode } = useSettings()
@@ -274,6 +276,7 @@ export default function EditorArea({
   const [pendingEdits, setPendingEdits] = useState<Map<number, Record<string, unknown>>>(new Map())
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null)
   const saveTabsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [hasSelection, setHasSelection] = useState(false)
 
   const activeTab = tabs.find((t) => t.id === activeTabId)
   const activeResult = tabResults[activeTabId]
@@ -456,7 +459,7 @@ export default function EditorArea({
       if (existing) { setActiveTabId(existing.id); return prev }
       const id = '__log__'
       setActiveTabId(id)
-      return [...prev, { id, title: 'Лог запросов', content: '', isLog: true }]
+      return [...prev, { id, title: t('editor.logTabTitle'), content: '', isLog: true }]
     })
   }, [openLogTrigger])
 
@@ -473,7 +476,7 @@ export default function EditorArea({
       if (existing) { setActiveTabId(tabId); return prev }
       return [...prev, {
         id: tabId,
-        title: `Схема · ${database}`,
+        title: t('editor.schemaTabTitle', { database }),
         content: '',
         schemaDiagram: { connectionId, database },
       }]
@@ -831,6 +834,10 @@ export default function EditorArea({
       keybindings: [2083], run: () => saveVersionRef.current() })
     editor.addAction({ id: 'command-palette-custom', label: 'Open Command Palette',
       keybindings: [2096], run: () => onOpenPalette?.() })
+    editor.onDidChangeCursorSelection(() => {
+      const sel = editor.getSelection()
+      setHasSelection(sel != null && !sel.isEmpty())
+    })
   }
 
   // ── Sync editor content on tab switch ────────────────────────────────────
@@ -840,6 +847,7 @@ export default function EditorArea({
     const tab = tabs.find((t) => t.id === activeTabId)
     if (!tab || tab.isDiff || tab.isLog || tab.tableView || tab.schemaDiagram) return
     editor.setValue(tab.content ?? '')
+    setHasSelection(false)
   }, [activeTabId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -882,7 +890,7 @@ export default function EditorArea({
                 </svg>
               )}
               <span>{tab.title}</span>
-              {dirty && <span className="text-[#e6db74] text-xs" title="Несохранённые изменения">●</span>}
+              {dirty && <span className="text-[#e6db74] text-xs" title={t('editor.unsavedDot')}>●</span>}
               <button
                 onClick={(e) => { e.stopPropagation(); closeTab(tab.id) }}
                 className="hover:text-vs-text opacity-60 hover:opacity-100 transition-opacity ml-0.5"
@@ -900,7 +908,7 @@ export default function EditorArea({
             setBottomTab('results')
           }}
           className="px-3 h-9 text-vs-textDim hover:text-vs-text hover:bg-vs-hover shrink-0 text-lg leading-none"
-          title="Новый запрос"
+          title={t('editor.newQuery')}
         >
           +
         </button>
@@ -969,7 +977,7 @@ export default function EditorArea({
             return (
               <span className="flex items-center gap-1.5 text-xs text-[#c09030]">
                 <Eye size={13} />
-                Режим просмотра — скрипт привязан к другой базе данных
+                {t('editor.viewOnly')}
               </span>
             )
           }
@@ -977,11 +985,11 @@ export default function EditorArea({
             <button
               onClick={() => executeQuery()}
               disabled={!activeConnectionId}
-              title={!activeConnectionId ? 'Нет активного подключения' : 'Выполнить (Ctrl+Enter)'}
+              title={!activeConnectionId ? t('connections.noActiveConnection') : `${t(hasSelection ? 'editor.executeSelection' : 'editor.execute')} (Ctrl+Enter)`}
               className="flex items-center gap-1.5 px-3 py-1 text-xs bg-[#0e7490] hover:bg-[#0c6478] text-white rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Play size={12} />
-              Выполнить
+              {t(hasSelection ? 'editor.executeSelection' : 'editor.execute')}
             </button>
           )
         })()}
@@ -990,21 +998,21 @@ export default function EditorArea({
         {isDirty && activeTab?.scriptId && (
           <button
             onClick={() => saveCurrentVersion(activeTabId)}
-            title="Сохранить версию (Ctrl+S)"
+            title={t('editor.saveVersionTitle')}
             className="px-3 py-1 text-xs bg-[#2d5016] hover:bg-[#3a6b1e] text-[#a8cc8c] rounded transition-colors border border-[#4a7c2f]"
           >
-            Сохранить версию
+            {t('editor.saveVersion')}
           </button>
         )}
 
         {!activeTab?.scriptId && !activeTab?.isDiff && activeTab?.content.trim() && (
           <button
             onClick={() => setShowSaveModal(true)}
-            title="Сохранить как скрипт"
+            title={t('editor.saveAsScript')}
             className="flex items-center gap-1.5 px-3 py-1 text-xs text-vs-textDim hover:text-vs-text hover:bg-vs-hover rounded transition-colors border border-vs-border"
           >
             <Save size={12} />
-            Сохранить как скрипт
+            {t('editor.saveAsScript')}
           </button>
         )}
 
@@ -1014,7 +1022,7 @@ export default function EditorArea({
             onChange={(e) => setActiveDatabase(e.target.value || null)}
             className="px-2 py-1 text-xs bg-vs-input text-vs-text border border-vs-border rounded outline-none hover:border-vs-statusBar focus:border-vs-statusBar"
           >
-            <option value="">-- база данных --</option>
+            <option value="">{t('editor.selectDatabase')}</option>
             {activeDatabases.map((db) => (
               <option key={db} value={db}>{db}</option>
             ))}
@@ -1022,12 +1030,12 @@ export default function EditorArea({
         )}
 
         {!activeConnectionId && (
-          <span className="text-xs text-vs-textDim">Нет активного подключения</span>
+          <span className="text-xs text-vs-textDim">{t('connections.noActiveConnection')}</span>
         )}
 
         <button
           onClick={() => setSafeMode(!safeMode)}
-          title={safeMode ? 'Защита включена — только SELECT. Нажмите чтобы разрешить изменения' : 'Защита отключена — изменения разрешены. Нажмите чтобы включить защиту'}
+          title={safeMode ? t('editor.safeOnTitle') : t('editor.safeOffTitle')}
           className={`ml-auto flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
             safeMode
               ? 'text-[#4ec9b0] hover:bg-vs-hover'
@@ -1035,8 +1043,8 @@ export default function EditorArea({
           }`}
         >
           {safeMode
-            ? <><ShieldCheck size={14} /><span className="hidden sm:inline">Защита</span></>
-            : <><ShieldOff size={14} /><span className="hidden sm:inline">Без защиты</span></>
+            ? <><ShieldCheck size={14} /><span className="hidden sm:inline">{t('editor.protection')}</span></>
+            : <><ShieldOff size={14} /><span className="hidden sm:inline">{t('editor.noProtection')}</span></>
           }
         </button>
       </div>
@@ -1050,12 +1058,12 @@ export default function EditorArea({
               <span className="opacity-50">·</span>
               <span className="flex items-center gap-1">
                 <GitBranch size={11} className="text-vs-textDim opacity-70" />
-                v{activeMeta.currentVersionNumber} из {activeMeta.versionCount}
+                {t('editor.versionOf', { ver: activeMeta.currentVersionNumber, total: activeMeta.versionCount })}
               </span>
               <span className="opacity-50">·</span>
-              <span>{activeMeta.runCount} успешных запусков</span>
+              <span>{t('editor.successRuns', { count: activeMeta.runCount })}</span>
               <span className="opacity-50">·</span>
-              <span>{scopeLabel(activeTab.scriptScope ?? 'global')}</span>
+              <span>{scopeLabel(activeTab.scriptScope ?? 'global', t)}</span>
             </>
           )}
         </div>
@@ -1100,15 +1108,15 @@ export default function EditorArea({
           <div className="flex flex-col h-full bg-vs-bg">
             <div className="flex items-center h-8 bg-vs-panelHeader border-b border-vs-border shrink-0">
               <TabBtn active={bottomTab === 'results'} onClick={() => setBottomTab('results')}>
-                Результаты
+                {t('editor.results')}
                 {activeResult?.cachedAt && !activeResult.loading && (
                   <span className="ml-1.5 text-[10px] text-vs-textDim opacity-70">
-                    кэш · {cachedSince(activeResult.cachedAt)}
+                    {t('editor.cache')} · {cachedSince(activeResult.cachedAt, t as (key: string, opts?: Record<string, unknown>) => string)}
                   </span>
                 )}
               </TabBtn>
               {activeTab?.scriptId && (
-                <TabBtn active={bottomTab === 'versions'} onClick={() => setBottomTab('versions')}>Версии</TabBtn>
+                <TabBtn active={bottomTab === 'versions'} onClick={() => setBottomTab('versions')}>{t('editor.versions')}</TabBtn>
               )}
               {editableTable && activeResult?.result && !activeResult.loading && bottomTab === 'results' && !safeMode && (
                 <button
@@ -1123,26 +1131,26 @@ export default function EditorArea({
                   }`}
                 >
                   <Pencil size={11} />
-                  {editMode ? 'Редактирование' : 'Редактировать'}
+                  {editMode ? t('editor.editing') : t('editor.editMode')}
                 </button>
               )}
             </div>
             {editMode && pendingEdits.size > 0 && (
               <div className="flex items-center gap-3 px-3 py-1 bg-[#1e3a1e] border-b border-[#3a6b1e] shrink-0 text-xs">
                 <span className="text-[#a8cc8c]">
-                  {pendingEdits.size} {pendingEdits.size === 1 ? 'строка изменена' : 'строк изменено'}
+                  {t('editor.rowsChanged', { count: pendingEdits.size })}
                 </span>
                 <button
                   onClick={executeApply}
                   className="px-3 py-0.5 bg-[#3a6b1e] hover:bg-[#4a7c2f] text-[#a8cc8c] rounded transition-colors border border-[#4a7c2f]"
                 >
-                  Применить
+                  {t('editor.applyChanges')}
                 </button>
                 <button
                   onClick={() => { setPendingEdits(new Map()); setEditMode(false) }}
                   className="px-3 py-0.5 text-vs-textDim hover:text-vs-text hover:bg-vs-hover rounded transition-colors"
                 >
-                  Отменить
+                  {t('editor.revertChanges')}
                 </button>
               </div>
             )}
@@ -1155,13 +1163,13 @@ export default function EditorArea({
                     <path d="M6 5 V7.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                     <circle cx="6" cy="9" r="0.5" fill="currentColor" />
                   </svg>
-                  <span className="text-[#f48771]">Соединение потеряно — данные устарели</span>
+                  <span className="text-[#f48771]">{t('results.connectionLostStale')}</span>
                   <button
                     onClick={() => activeConnectionId && reconnect(activeConnectionId)}
                     className="ml-1 px-2 py-0.5 rounded text-[10px] font-semibold"
                     style={{ background: 'rgba(244,135,113,0.15)', color: '#f48771', border: '1px solid rgba(244,135,113,0.3)' }}
                   >
-                    Переподключить
+                    {t('connections.reconnect')}
                   </button>
                 </div>
               )}
@@ -1202,29 +1210,23 @@ export default function EditorArea({
           <div className="bg-vs-sidebar border border-vs-border rounded-lg shadow-xl w-[420px] p-6 flex flex-col gap-4">
             <div className="flex items-center gap-3">
               <ShieldCheck size={22} className="text-[#4ec9b0] shrink-0" />
-              <span className="text-vs-text font-semibold">Защита от изменений</span>
+              <span className="text-vs-text font-semibold">{t('safeMode.title')}</span>
             </div>
             <p className="text-sm text-vs-textDim leading-relaxed">
-              Запрос содержит операцию{' '}
-              <span className="font-mono text-[#f48771] font-bold">{blockedOp}</span>,
-              которая изменяет данные. Выполнить этот запрос?
-            </p>
-            <p className="text-xs text-vs-textDim opacity-60">
-              Защита останется включённой для следующих запросов.
-              Отключить глобально можно кнопкой щита в тулбаре.
+              {t('safeMode.message', { operation: blockedOp })}
             </p>
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => setBlockedOp(null)}
                 className="px-4 py-1.5 text-sm text-vs-textDim hover:text-vs-text hover:bg-vs-hover rounded transition-colors"
               >
-                Отмена
+                {t('safeMode.cancel')}
               </button>
               <button
                 onClick={() => { setBlockedOp(null); executeQuery(undefined, undefined, true) }}
                 className="px-4 py-1.5 text-sm bg-[#f48771]/20 hover:bg-[#f48771]/30 text-[#f48771] rounded transition-colors border border-[#f48771]/40"
               >
-                Выполнить
+                {t('safeMode.confirm')}
               </button>
             </div>
           </div>

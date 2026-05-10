@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { X, Copy, Check } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { QueryResult } from '@shared/types'
 
 const ROW_H = 25
@@ -153,6 +154,7 @@ function JsonNode({ value, depth = 0 }: { value: unknown; depth?: number }) {
 interface CellInfo { column: string; value: unknown }
 
 function CellModal({ cell, onClose }: { cell: CellInfo; onClose: () => void }) {
+  const { t } = useTranslation()
   const type = detectType(cell.value)
   const isJson = type === 'json'
   const [mode, setMode] = useState<'tree' | 'raw'>('tree')
@@ -196,7 +198,7 @@ function CellModal({ cell, onClose }: { cell: CellInfo; onClose: () => void }) {
           </span>
           <button
             onClick={copyValue}
-            title="Скопировать значение"
+            title={t('results.copyValue')}
             className="flex items-center gap-1 text-vs-textDim hover:text-vs-text transition-colors"
           >
             {copied ? <Check size={13} className="text-[#4ec9b0]" /> : <Copy size={13} />}
@@ -288,9 +290,11 @@ function JsonEditModal({
   function handleSave() {
     const trimmed = text.trim()
     if (trimmed === '') { onSave(null); return }
-    try { JSON.parse(trimmed) } catch { setJsonError('Невалидный JSON'); return }
+    try { JSON.parse(trimmed) } catch { setJsonError('Invalid JSON'); return }
     onSave(trimmed)
   }
+
+  const { t } = useTranslation()
 
   return (
     <div
@@ -321,13 +325,13 @@ function JsonEditModal({
             onClick={onClose}
             className="px-4 py-1.5 text-sm text-vs-textDim hover:text-vs-text hover:bg-vs-hover rounded transition-colors"
           >
-            Отмена
+            {t('common.cancel')}
           </button>
           <button
             onClick={handleSave}
             className="px-4 py-1.5 text-sm bg-[#0e7490] hover:bg-[#0c6478] text-white rounded transition-colors"
           >
-            Сохранить
+            {t('common.save')}
           </button>
         </div>
       </div>
@@ -348,6 +352,7 @@ function InlineEditCell({
   onCommit: (value: string | null) => void
   onRevert?: () => void
 }) {
+  const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
   const [jsonModal, setJsonModal] = useState(false)
   const inputRef = React.useRef<HTMLInputElement>(null)
@@ -367,7 +372,7 @@ function InlineEditCell({
 
   if (isPk) {
     return (
-      <span className="text-vs-textDim opacity-70 select-none truncate block w-full" title="Первичный ключ — не редактируется">
+      <span className="text-vs-textDim opacity-70 select-none truncate block w-full" title={t('results.pkReadOnly')}>
         {displayStr ?? <em className="italic">NULL</em>}
       </span>
     )
@@ -379,7 +384,7 @@ function InlineEditCell({
         <span
           onDoubleClick={() => setJsonModal(true)}
           className={`block w-full truncate cursor-pointer ${isDirty ? 'text-[#e6db74]' : ''}`}
-          title={isDirty ? `Изменено (двойной клик — редактировать)` : 'Двойной клик — редактировать JSON'}
+          title={isDirty ? t('results.changedDblClick') : t('results.dblClickEditJson')}
         >
           {displayStr == null
             ? <span className="text-vs-textDim italic">NULL</span>
@@ -440,19 +445,19 @@ function InlineEditCell({
           <span
             className="w-[5px] h-[5px] rounded-full bg-[#c586c0] shrink-0"
             style={{ boxShadow: '0 0 0 2px rgba(197,134,192,0.25)' }}
-            title={`Было: ${displayStr ?? 'NULL'}`}
+            title={t('results.oldValue', { value: displayStr ?? 'NULL' })}
           />
           <span
             onDoubleClick={() => setEditing(true)}
             className="flex-1 truncate cursor-text text-[#c586c0] font-medium"
-            title={`Изменено: ${displayStr ?? 'NULL'}`}
+            title={t('results.changedValue', { value: displayStr ?? 'NULL' })}
           >
             {displayStr == null ? <span className="italic opacity-60">NULL</span> : displayStr}
           </span>
           <button
             onClick={(e) => { e.stopPropagation(); onRevert?.() }}
             className="shrink-0 opacity-0 group-hover:opacity-100 text-vs-textDim hover:text-[#f48771] text-[12px] leading-none px-0.5 transition-opacity"
-            title="Откатить изменение"
+            title={t('results.revertCell')}
           >
             ↩
           </button>
@@ -504,6 +509,7 @@ function InlineEditCell({
 // ─── Main ──────────────────────────────────────────────────────────────────
 
 export default function ResultsGrid({ result, error, loading, editMode, pkCols = [], pendingEdits, onCellChange, onRevertCell, page = 0, totalRows, pageSize = 10000, onPageChange }: Props) {
+  const { t } = useTranslation()
   const [activeCell, setActiveCell] = useState<CellInfo | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [scrollTop, setScrollTop] = useState(0)
@@ -526,7 +532,7 @@ export default function ResultsGrid({ result, error, loading, editMode, pkCols =
     return (
       <div className="flex items-center justify-center h-full text-vs-textDim text-sm gap-2">
         <span className="animate-spin inline-block w-4 h-4 border-2 border-vs-statusBar border-t-transparent rounded-full" />
-        Выполняется запрос…
+        {t('editor.queryRunning')}
       </div>
     )
   }
@@ -544,7 +550,7 @@ export default function ResultsGrid({ result, error, loading, editMode, pkCols =
   if (!result) {
     return (
       <div className="flex items-center justify-center h-full text-vs-textDim text-sm">
-        Выполните запрос чтобы увидеть результаты
+        {t('editor.noResults')}
       </div>
     )
   }
@@ -557,18 +563,18 @@ export default function ResultsGrid({ result, error, loading, editMode, pkCols =
       <div className="flex items-center gap-4 px-3 py-1 border-b border-vs-border text-xs text-vs-textDim shrink-0">
         {isDml ? (
           <span className="text-[#4ec9b0]">
-            Затронуто строк: <strong className="text-[#9cdcfe]">{result.affectedRows ?? 0}</strong>
+            {t('results.affectedRows')}: <strong className="text-[#9cdcfe]">{result.affectedRows ?? 0}</strong>
           </span>
         ) : (
           <span>
-            Строк: <strong className="text-[#9cdcfe]">{result.rows.length}</strong>
+            {t('results.rows')}: <strong className="text-[#9cdcfe]">{result.rows.length}</strong>
             {result.truncated && !onPageChange && (
-              <span className="ml-1 text-[#ce9178]">(показано {result.rows.length.toLocaleString()} из {result.rowCount.toLocaleString()} — добавьте LIMIT)</span>
+              <span className="ml-1 text-[#ce9178]">{t('results.truncated', { shown: result.rows.length.toLocaleString(), total: result.rowCount.toLocaleString() })}</span>
             )}
           </span>
         )}
         <span>
-          Время: <strong className="text-[#9cdcfe]">{result.durationMs} мс</strong>
+          {t('results.time')}: <strong className="text-[#9cdcfe]">{result.durationMs} {t('results.ms')}</strong>
         </span>
         {!isDml && onPageChange && (totalRows !== undefined || page > 0) && (() => {
           const totalPages = totalRows !== undefined ? Math.ceil(totalRows / pageSize) : null
@@ -578,14 +584,14 @@ export default function ResultsGrid({ result, error, loading, editMode, pkCols =
             <div className="flex items-center gap-1 ml-auto">
               {totalRows !== undefined && (
                 <span className="mr-1 text-vs-textDim">
-                  всего: <strong className="text-[#9cdcfe]">{totalRows.toLocaleString()}</strong>
+                  {t('results.total')}: <strong className="text-[#9cdcfe]">{totalRows.toLocaleString()}</strong>
                 </span>
               )}
               <button
                 onClick={() => onPageChange(page - 1)}
                 disabled={!hasPrev}
                 className="px-1.5 py-0.5 rounded hover:bg-vs-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                title="Предыдущая страница"
+                title={t('results.prevPage')}
               >
                 ‹
               </button>
@@ -596,7 +602,7 @@ export default function ResultsGrid({ result, error, loading, editMode, pkCols =
                 onClick={() => onPageChange(page + 1)}
                 disabled={!hasNext}
                 className="px-1.5 py-0.5 rounded hover:bg-vs-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                title="Следующая страница"
+                title={t('results.nextPage')}
               >
                 ›
               </button>
@@ -607,7 +613,7 @@ export default function ResultsGrid({ result, error, loading, editMode, pkCols =
 
       {isDml && (
         <div className="flex items-center justify-center flex-1 text-[#4ec9b0] text-sm">
-          Запрос выполнен успешно
+          {t('results.querySuccess')}
         </div>
       )}
 

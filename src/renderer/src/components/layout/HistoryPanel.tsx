@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { FileCode2, Terminal, RefreshCw, ExternalLink, Play } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { HistoryEntry, ScriptFile } from '@shared/types'
 
 interface Props {
@@ -9,14 +10,14 @@ interface Props {
   onRunSql: (sql: string) => void
 }
 
-function relativeTime(ts: number): string {
+function relativeTime(ts: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
   const diff = Date.now() - ts
   const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'только что'
-  if (mins < 60) return `${mins} мин назад`
+  if (mins < 1) return t('history.relTimeJustNow')
+  if (mins < 60) return t('history.relTimeMins', { n: mins })
   const hours = Math.floor(diff / 3600000)
-  if (hours < 24) return `${hours} ч назад`
-  return `${Math.floor(diff / 86400000)} дн назад`
+  if (hours < 24) return t('history.relTimeHours', { n: hours })
+  return t('history.relTimeDays', { n: Math.floor(diff / 86400000) })
 }
 
 function fmtMs(ms: number): string {
@@ -25,6 +26,7 @@ function fmtMs(ms: number): string {
 }
 
 export default function HistoryPanel({ onOpenScript, onRunScript, onOpenSql, onRunSql }: Props) {
+  const { t } = useTranslation()
   const [entries, setEntries] = useState<HistoryEntry[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -55,7 +57,7 @@ export default function HistoryPanel({ onOpenScript, onRunScript, onOpenSql, onR
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-vs-textDim text-xs">
-        Загрузка…
+        {t('common.loading')}
       </div>
     )
   }
@@ -63,8 +65,8 @@ export default function HistoryPanel({ onOpenScript, onRunScript, onOpenSql, onR
   if (entries.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 gap-2 text-center px-4">
-        <span className="text-sm text-vs-textDim">История пуста</span>
-        <span className="text-xs text-vs-textDim opacity-60">Запросы появятся после выполнения</span>
+        <span className="text-sm text-vs-textDim">{t('history.empty')}</span>
+        <span className="text-xs text-vs-textDim opacity-60">{t('history.emptySub')}</span>
       </div>
     )
   }
@@ -72,7 +74,7 @@ export default function HistoryPanel({ onOpenScript, onRunScript, onOpenSql, onR
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-end px-3 py-1 border-b border-vs-border shrink-0">
-        <button onClick={reload} title="Обновить" className="text-vs-textDim hover:text-vs-text transition-colors">
+        <button onClick={reload} title={t('common.refresh')} className="text-vs-textDim hover:text-vs-text transition-colors">
           <RefreshCw size={12} />
         </button>
       </div>
@@ -96,7 +98,7 @@ export default function HistoryPanel({ onOpenScript, onRunScript, onOpenSql, onR
                   ) : (
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-vs-border text-vs-textDim uppercase tracking-wide shrink-0">SQL</span>
                   )}
-                  <span className="text-[10px] text-vs-textDim ml-auto shrink-0">{relativeTime(entry.ranAt)}</span>
+                  <span className="text-[10px] text-vs-textDim ml-auto shrink-0">{relativeTime(entry.ranAt, t as (key: string, opts?: Record<string, unknown>) => string)}</span>
                 </div>
 
                 {/* sql preview */}
@@ -108,49 +110,47 @@ export default function HistoryPanel({ onOpenScript, onRunScript, onOpenSql, onR
                 <div className="flex items-center gap-2 mt-1">
                   <span className="text-[10px] text-vs-textDim">{fmtMs(entry.durationMs)}</span>
                   {entry.rowCount != null && (
-                    <span className="text-[10px] text-vs-textDim">{entry.rowCount} строк</span>
+                    <span className="text-[10px] text-vs-textDim">{entry.rowCount} {t('queryLog.rows')}</span>
                   )}
 
                   <div className="ml-auto flex gap-2 invisible group-hover:visible">
-                    {/* открыть */}
                     {entry.type === 'script' && entry.scriptId ? (
                       <button
                         onClick={() => handleOpenScript(entry)}
-                        title="Открыть скрипт"
+                        title={t('common.open')}
                         className="flex items-center gap-0.5 text-[10px] text-vs-textDim hover:text-vs-text transition-colors"
                       >
                         <ExternalLink size={10} />
-                        открыть
+                        {t('common.open')}
                       </button>
                     ) : (
                       <button
                         onClick={() => onOpenSql(entry.sqlPreview)}
-                        title="Открыть в редакторе"
+                        title={t('common.open')}
                         className="flex items-center gap-0.5 text-[10px] text-vs-textDim hover:text-vs-text transition-colors"
                       >
                         <ExternalLink size={10} />
-                        открыть
+                        {t('common.open')}
                       </button>
                     )}
 
-                    {/* запустить */}
                     {entry.type === 'script' && entry.scriptId ? (
                       <button
                         onClick={() => handleRunScript(entry)}
-                        title="Открыть и запустить"
+                        title={t('common.run')}
                         className="flex items-center gap-0.5 text-[10px] text-vs-textDim hover:text-[#4ec9b0] transition-colors"
                       >
                         <Play size={10} />
-                        запустить
+                        {t('common.run')}
                       </button>
                     ) : (
                       <button
                         onClick={() => onRunSql(entry.sqlPreview)}
-                        title="Открыть и запустить"
+                        title={t('common.run')}
                         className="flex items-center gap-0.5 text-[10px] text-vs-textDim hover:text-[#4ec9b0] transition-colors"
                       >
                         <Play size={10} />
-                        запустить
+                        {t('common.run')}
                       </button>
                     )}
                   </div>

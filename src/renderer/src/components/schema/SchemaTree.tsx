@@ -3,6 +3,7 @@ import {
   Database, Table2, ChevronRight, ChevronDown,
   KeyRound, Key, Link2, Hash, Columns3, Loader2, Eye, Plug2,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useConnections } from '@renderer/context/ConnectionsContext'
 import { useMcp } from '@renderer/context/McpContext'
 import type { TableInfo, ColumnInfo, McpSafeMode } from '@shared/types'
@@ -61,6 +62,7 @@ const SAFE_MODE_LABELS: Record<McpSafeMode, string> = {
 const SAFE_MODE_CYCLE: McpSafeMode[] = ['read_only', 'safe', 'full']
 
 export default function SchemaTree({ onTableSelect }: Props) {
+  const { t } = useTranslation()
   const { activeConnectionId, activeDatabases, activeDatabase, setActiveDatabase } = useConnections()
   const { isEnabled, enableDb, disableDb, setSafeMode, activeSession } = useMcp()
   const [dbStates, setDbStates] = useState<Record<string, DbState>>({})
@@ -239,7 +241,7 @@ export default function SchemaTree({ onTableSelect }: Props) {
                   onClick={(e) => e.stopPropagation()}
                 >
                   <button
-                    title={mcpOn ? 'MCP включён — нажмите чтобы отключить' : 'Включить MCP для этой базы'}
+                    title={mcpOn ? t('mcp.disableForDb') : t('mcp.enableForDb')}
                     onClick={() => mcpOn ? disableDb(activeConnectionId, db) : enableDb(activeConnectionId, db)}
                     className={`flex items-center justify-center w-4 h-4 rounded transition-colors ${mcpOn ? 'text-[#4ec9b0] hover:text-[#f48771]' : 'text-vs-textDim hover:text-[#4ec9b0]'}`}
                   >
@@ -249,10 +251,10 @@ export default function SchemaTree({ onTableSelect }: Props) {
                     <button
                       title={
                         curSafeMode === 'read_only'
-                          ? 'READ — только SELECT/SHOW/DESCRIBE\nAgент не может изменять данные\n\nНажмите для смены режима'
+                          ? t('mcp.readOnlyTooltip')
                           : curSafeMode === 'safe'
-                          ? 'SAFE — чтение и запись разрешены\nЗаблокировано: DROP, TRUNCATE, ALTER TABLE,\nDELETE без WHERE\n\nНажмите для смены режима'
-                          : 'FULL — все запросы разрешены\nАгент имеет полный доступ к базе\n\nНажмите для смены режима'
+                          ? t('mcp.safeTooltip')
+                          : t('mcp.fullTooltip')
                       }
                       onClick={() => {
                         const cycle: McpSafeMode[] = ['read_only', 'safe', 'full']
@@ -276,20 +278,20 @@ export default function SchemaTree({ onTableSelect }: Props) {
             {ds?.expanded && ds.tables && (
               <div className="ml-4">
                 {(() => {
-                  const maxSize = Math.max(...ds.tables.map((t) => t.sizeBytes ?? 0))
-                  return ds.tables.map((t) => {
-                  const tKey = `${db}.${t.name}`
+                  const maxSize = Math.max(...ds.tables.map((tbl) => tbl.sizeBytes ?? 0))
+                  return ds.tables.map((tbl) => {
+                  const tKey = `${db}.${tbl.name}`
                   const ts = tableStates[tKey]
-                  const isView = t.tableType !== 'BASE TABLE'
-                  const sz = t.sizeBytes ?? 0
+                  const isView = tbl.tableType !== 'BASE TABLE'
+                  const sz = tbl.sizeBytes ?? 0
                   const barPct = maxSize > 0 && sz > 0 ? Math.max(3, (sz / maxSize) * 100) : 0
                   return (
-                    <div key={t.name}>
+                    <div key={tbl.name}>
                       <div
                         className="flex items-center gap-1 px-2 py-0.5 cursor-pointer rounded mx-1 hover:bg-vs-hover group"
-                        onClick={() => toggleTable(db, t.name)}
-                        onDoubleClick={() => activeConnectionId && onTableSelect?.(activeConnectionId, db, t.name)}
-                        title="Двойной клик — открыть структуру таблицы"
+                        onClick={() => toggleTable(db, tbl.name)}
+                        onDoubleClick={() => activeConnectionId && onTableSelect?.(activeConnectionId, db, tbl.name)}
+                        title={t('schema.dblClickOpenTable')}
                       >
                         {ts?.loading
                           ? <Loader2 size={12} className="animate-spin text-vs-statusBar shrink-0" />
@@ -301,7 +303,7 @@ export default function SchemaTree({ onTableSelect }: Props) {
                           ? <Eye size={13} className="text-[#4a9cd6] shrink-0" />
                           : <Table2 size={13} className="text-[#4a9cd6] shrink-0" />
                         }
-                        <span className="truncate text-vs-text flex-1 min-w-0">{t.name}</span>
+                        <span className="truncate text-vs-text flex-1 min-w-0">{tbl.name}</span>
                         {sz > 0 && (
                           <div className="flex items-center gap-1.5 shrink-0 ml-1">
                             <span className={`text-[10px] font-mono w-[52px] text-right tabular-nums ${sizeTextClass(sz)}`}>

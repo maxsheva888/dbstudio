@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { X, Loader2, CheckCircle2, XCircle, ChevronDown, ChevronRight, FolderOpen, Plus, Check } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { ConnectionConfig, DbType, SSHConfig } from '@shared/types'
 import { useTags } from '@renderer/context/TagsContext'
 
@@ -24,6 +25,7 @@ function makeEmpty(): Omit<ConnectionConfig, 'id' | 'createdAt'> {
 type TestState = 'idle' | 'loading' | 'ok' | 'error'
 
 export default function ConnectionModal({ initial, onSave, onClose }: Props) {
+  const { t } = useTranslation()
   const { tags, addTag, deleteTag } = useTags()
 
   const [form, setForm] = useState<Omit<ConnectionConfig, 'id' | 'createdAt'>>(() => {
@@ -89,7 +91,7 @@ export default function ConnectionModal({ initial, onSave, onClose }: Props) {
     setTestMsg('')
     const result = await window.api.connections.test(buildConfig())
     setTestState(result.success ? 'ok' : 'error')
-    setTestMsg(result.message + (result.latencyMs ? ` (${result.latencyMs} мс)` : ''))
+    setTestMsg(result.message + (result.latencyMs ? ` (${result.latencyMs} ${t('results.ms')})` : ''))
   }
 
   function buildConfig(): Omit<ConnectionConfig, 'id' | 'createdAt'> {
@@ -120,7 +122,7 @@ export default function ConnectionModal({ initial, onSave, onClose }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-vs-border shrink-0">
           <span className="text-sm font-semibold text-vs-text">
-            {initial ? 'Редактировать подключение' : 'Новое подключение'}
+            {initial ? t('connections.editConnection') : t('connections.newConnection')}
           </span>
           <button onClick={onClose} className="text-vs-textDim hover:text-vs-text"><X size={16} /></button>
         </div>
@@ -141,40 +143,40 @@ export default function ConnectionModal({ initial, onSave, onClose }: Props) {
           </div>
 
           {/* Name */}
-          <Field label="Название" required>
-            <input type="text" placeholder="Мой сервер" value={form.name} onChange={(e) => set('name', e.target.value)} />
+          <Field label={t('connections.name')} required>
+            <input type="text" placeholder={t('connections.myServer')} value={form.name} onChange={(e) => set('name', e.target.value)} />
           </Field>
 
           {/* SQLite or MySQL/PG fields */}
           {isSQLite ? (
-            <Field label="Файл базы данных" required>
+            <Field label={t('connections.filePath')} required>
               <div className="flex gap-2">
                 <input type="text" placeholder="/path/to/database.db" value={form.filePath ?? ''}
                   onChange={(e) => set('filePath', e.target.value)} className="flex-1" />
                 <button type="button" onClick={() => pickFile('sqlite')}
                   className="flex items-center gap-1 px-3 py-1.5 text-xs bg-vs-input hover:bg-vs-hover text-vs-text rounded border border-vs-border transition-colors shrink-0">
-                  <FolderOpen size={13} /> Выбрать
+                  <FolderOpen size={13} /> {t('connections.browseFile')}
                 </button>
               </div>
             </Field>
           ) : (
             <>
               <div className="flex gap-3">
-                <Field label="Хост" required className="flex-1">
+                <Field label={t('connections.host')} required className="flex-1">
                   <input type="text" placeholder="localhost" value={form.host} onChange={(e) => set('host', e.target.value)} />
                 </Field>
-                <Field label="Порт" required className="w-24">
+                <Field label={t('connections.port')} required className="w-24">
                   <input type="number" value={form.port} onChange={(e) => set('port', Number(e.target.value))} />
                 </Field>
               </div>
-              <Field label="Пользователь" required>
+              <Field label={t('connections.user')} required>
                 <input type="text" placeholder="root" value={form.user} onChange={(e) => set('user', e.target.value)} />
               </Field>
-              <Field label="Пароль">
+              <Field label={t('connections.password')}>
                 <input type="password" placeholder="••••••••" value={form.password} onChange={(e) => set('password', e.target.value)} />
               </Field>
-              <Field label={type === 'postgres' ? 'База данных (обязательно для Postgres)' : 'База данных по умолчанию'}>
-                <input type="text" placeholder={type === 'postgres' ? 'postgres' : '(необязательно)'}
+              <Field label={t('connections.database')}>
+                <input type="text" placeholder={type === 'postgres' ? 'postgres' : t('connections.optional')}
                   value={form.database ?? ''} onChange={(e) => set('database', e.target.value)} />
               </Field>
             </>
@@ -182,7 +184,7 @@ export default function ConnectionModal({ initial, onSave, onClose }: Props) {
 
           {/* Tags */}
           <div className="flex flex-col gap-2">
-            <label className="text-xs text-vs-textDim">Теги среды</label>
+            <label className="text-xs text-vs-textDim">{t('connections.tags')}</label>
             <div className="flex gap-2 flex-wrap items-center">
               {tags.map((tag) => {
                 const sel = selectedTags.includes(tag.key)
@@ -211,7 +213,7 @@ export default function ConnectionModal({ initial, onSave, onClose }: Props) {
                       <button
                         type="button"
                         onClick={() => deleteTag(tag.key)}
-                        title="Удалить тег"
+                        title={t('connections.deleteTag')}
                         className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-vs-input border border-vs-border
                           text-vs-textDim hover:text-red-400 items-center justify-center hidden group-hover/tag:flex"
                         style={{ fontSize: 8, lineHeight: 1 }}
@@ -227,7 +229,7 @@ export default function ConnectionModal({ initial, onSave, onClose }: Props) {
               {!showNewTag && (
                 <button type="button" onClick={() => setShowNewTag(true)}
                   className="flex items-center gap-1 px-2 py-1 text-xs rounded border border-dashed border-vs-border text-vs-textDim hover:border-vs-textDim hover:text-vs-text transition-colors">
-                  <Plus size={11} /> Тег
+                  <Plus size={11} /> {t('connections.addTag')}
                 </button>
               )}
             </div>
@@ -244,7 +246,7 @@ export default function ConnectionModal({ initial, onSave, onClose }: Props) {
                 />
                 <input
                   type="text"
-                  placeholder="Название тега"
+                  placeholder={t('connections.tagName')}
                   value={newTagLabel}
                   onChange={(e) => setNewTagLabel(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') saveNewTag(); if (e.key === 'Escape') setShowNewTag(false) }}
@@ -253,7 +255,7 @@ export default function ConnectionModal({ initial, onSave, onClose }: Props) {
                 />
                 <button type="button" onClick={saveNewTag} disabled={!newTagLabel.trim()}
                   className="px-2 py-1 text-xs bg-vs-statusBar/80 hover:bg-vs-statusBar text-white rounded disabled:opacity-40 transition-colors">
-                  Добавить
+                  {t('connections.addTagBtn')}
                 </button>
                 <button type="button" onClick={() => setShowNewTag(false)}
                   className="text-vs-textDim hover:text-vs-text">
@@ -291,16 +293,16 @@ export default function ConnectionModal({ initial, onSave, onClose }: Props) {
                 }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-xs text-vs-textDim hover:text-vs-text hover:bg-vs-hover transition-colors">
                 {sshOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                <span className="flex-1 text-left">SSH-туннель</span>
+                <span className="flex-1 text-left">{t('connections.sshTunnel')}</span>
                 {sshEnabled && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#4ec9b0]/20 text-[#4ec9b0]">включён</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#4ec9b0]/20 text-[#4ec9b0]">{t('connections.sshEnabled')}</span>
                 )}
               </button>
 
               {sshOpen && (
                 <div className="px-3 pb-3 pt-1 flex flex-col gap-2 bg-vs-bg/50 border-t border-vs-border">
                   <div className="flex gap-2 items-center mb-1">
-                    <label className="text-xs text-vs-textDim flex-1">Включить SSH-туннель</label>
+                    <label className="text-xs text-vs-textDim flex-1">{t('connections.enableSshTunnel')}</label>
                     <button type="button" onClick={() => setSshEnabled((v) => !v)}
                       className={`w-9 h-5 rounded-full transition-colors relative ${sshEnabled ? 'bg-[#4ec9b0]' : 'bg-vs-border'}`}>
                       <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${sshEnabled ? 'left-4' : 'left-0.5'}`} />
@@ -309,34 +311,34 @@ export default function ConnectionModal({ initial, onSave, onClose }: Props) {
                   {sshEnabled && (
                     <>
                       <div className="flex gap-3">
-                        <Field label="SSH Хост" required className="flex-1">
+                        <Field label={t('connections.sshHost')} required className="flex-1">
                           <input type="text" placeholder="bastion.example.com" value={sshForm.host} onChange={(e) => setSsh('host', e.target.value)} />
                         </Field>
-                        <Field label="Порт" className="w-20">
+                        <Field label={t('connections.sshPort')} className="w-20">
                           <input type="number" value={sshForm.port} onChange={(e) => setSsh('port', Number(e.target.value))} />
                         </Field>
                       </div>
-                      <Field label="SSH Пользователь" required>
+                      <Field label={t('connections.sshUser')} required>
                         <input type="text" placeholder="ubuntu" value={sshForm.user} onChange={(e) => setSsh('user', e.target.value)} />
                       </Field>
                       <div className="flex flex-col gap-1">
-                        <label className="text-xs text-vs-textDim">Аутентификация</label>
+                        <label className="text-xs text-vs-textDim">{t('connections.sshAuth')}</label>
                         <div className="flex gap-2">
                           {(['password', 'key'] as const).map((authType) => (
                             <button key={authType} type="button" onClick={() => setSsh('authType', authType)}
                               className={`flex-1 py-1 text-xs rounded border transition-colors ${sshForm.authType === authType ? 'border-vs-statusBar bg-vs-statusBar/10 text-vs-text' : 'border-vs-border text-vs-textDim hover:border-vs-textDim'}`}>
-                              {authType === 'password' ? 'Пароль' : 'Приватный ключ'}
+                              {authType === 'password' ? t('connections.sshPassword') : t('connections.sshKey')}
                             </button>
                           ))}
                         </div>
                       </div>
                       {sshForm.authType === 'password' ? (
-                        <Field label="SSH Пароль">
+                        <Field label={t('connections.sshPassword')}>
                           <input type="password" placeholder="••••••••" value={sshForm.password ?? ''} onChange={(e) => setSsh('password', e.target.value)} />
                         </Field>
                       ) : (
                         <>
-                          <Field label="Файл приватного ключа">
+                          <Field label={t('connections.sshKey')}>
                             <div className="flex gap-2">
                               <input type="text" placeholder="~/.ssh/id_rsa" value={sshForm.keyPath ?? ''} onChange={(e) => setSsh('keyPath', e.target.value)} className="flex-1" />
                               <button type="button" onClick={() => pickFile('sshkey')}
@@ -345,8 +347,8 @@ export default function ConnectionModal({ initial, onSave, onClose }: Props) {
                               </button>
                             </div>
                           </Field>
-                          <Field label="Passphrase (если есть)">
-                            <input type="password" placeholder="(необязательно)" value={sshForm.passphrase ?? ''} onChange={(e) => setSsh('passphrase', e.target.value)} />
+                          <Field label={t('connections.passphrase')}>
+                            <input type="password" placeholder={t('connections.optional')} value={sshForm.passphrase ?? ''} onChange={(e) => setSsh('passphrase', e.target.value)} />
                           </Field>
                         </>
                       )}
@@ -366,7 +368,7 @@ export default function ConnectionModal({ initial, onSave, onClose }: Props) {
               {testState === 'loading' && <Loader2 size={13} className="animate-spin" />}
               {testState === 'ok' && <CheckCircle2 size={13} />}
               {testState === 'error' && <XCircle size={13} />}
-              <span>{testState === 'loading' ? 'Проверяем подключение...' : testMsg}</span>
+              <span>{testState === 'loading' ? t('connections.testing') : testMsg}</span>
             </div>
           )}
         </div>
@@ -375,13 +377,13 @@ export default function ConnectionModal({ initial, onSave, onClose }: Props) {
         <div className="flex items-center justify-between px-5 py-3 border-t border-vs-border shrink-0">
           <button onClick={handleTest} disabled={testState === 'loading'}
             className="px-3 py-1.5 text-xs bg-vs-input hover:bg-vs-hover text-vs-text rounded disabled:opacity-50 transition-colors">
-            {testState === 'loading' ? 'Тестируем...' : 'Тест подключения'}
+            {testState === 'loading' ? t('connections.testing') : t('connections.testConnection')}
           </button>
           <div className="flex gap-2">
-            <button onClick={onClose} className="px-3 py-1.5 text-xs text-vs-textDim hover:text-vs-text transition-colors">Отмена</button>
+            <button onClick={onClose} className="px-3 py-1.5 text-xs text-vs-textDim hover:text-vs-text transition-colors">{t('common.cancel')}</button>
             <button onClick={handleSave} disabled={saving || !canSave()}
               className="px-4 py-1.5 text-xs bg-[#0e7490] hover:bg-[#0c6478] text-white rounded disabled:opacity-50 transition-colors">
-              {saving ? 'Сохраняем...' : 'Сохранить'}
+              {saving ? '…' : t('connections.saveConnection')}
             </button>
           </div>
         </div>

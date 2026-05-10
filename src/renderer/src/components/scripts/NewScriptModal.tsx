@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useConnections } from '@renderer/context/ConnectionsContext'
 
 interface Props {
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export default function NewScriptModal({ onSave, onClose, initialTable }: Props) {
+  const { t } = useTranslation()
   const { activeDatabases, activeDatabase, activeConnectionId } = useConnections()
   const [name, setName] = useState('')
   const [scopeType, setScopeType] = useState<'global' | 'db' | 'table'>('global')
@@ -99,10 +101,10 @@ export default function NewScriptModal({ onSave, onClose, initialTable }: Props)
         onSubmit={handleSubmit}
         className="bg-vs-sidebar border border-vs-border rounded shadow-xl w-96 p-5 flex flex-col gap-4"
       >
-        <h2 className="text-sm font-semibold text-vs-text">Новый скрипт</h2>
+        <h2 className="text-sm font-semibold text-vs-text">{t('scripts.new')}</h2>
 
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-vs-textDim">Название</label>
+          <label className="text-xs text-vs-textDim">{t('scripts.scriptName')}</label>
           <input
             autoFocus
             value={name}
@@ -113,21 +115,21 @@ export default function NewScriptModal({ onSave, onClose, initialTable }: Props)
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-vs-textDim">Область действия</label>
+          <label className="text-xs text-vs-textDim">{t('scripts.scope')}</label>
           <select
             value={scopeType}
             onChange={(e) => setScopeType(e.target.value as 'global' | 'db' | 'table')}
             className="px-3 py-1.5 text-sm bg-vs-input text-vs-text border border-vs-border rounded outline-none focus:border-vs-statusBar"
           >
-            <option value="global">Глобальный</option>
-            <option value="db" disabled={!hasConnection}>База данных{!hasConnection ? ' (нет подключения)' : ''}</option>
-            <option value="table" disabled={!hasConnection}>Таблица{!hasConnection ? ' (нет подключения)' : ''}</option>
+            <option value="global">{t('scripts.scopeGlobal')}</option>
+            <option value="db" disabled={!hasConnection}>{t('scripts.scopeDb')}{!hasConnection ? ` (${t('scripts.noConnection')})` : ''}</option>
+            <option value="table" disabled={!hasConnection}>{t('scripts.scopeTable')}{!hasConnection ? ` (${t('scripts.noConnection')})` : ''}</option>
           </select>
         </div>
 
         {(scopeType === 'db' || scopeType === 'table') && (
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-vs-textDim">База данных</label>
+            <label className="text-xs text-vs-textDim">{t('connections.database')}</label>
             {activeDatabases.length > 0 ? (
               <select
                 value={dbName}
@@ -151,7 +153,7 @@ export default function NewScriptModal({ onSave, onClose, initialTable }: Props)
 
         {scopeType === 'table' && (
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-vs-textDim">Таблица</label>
+            <label className="text-xs text-vs-textDim">{t('scripts.scopeTable')}</label>
             <div className="relative">
               <input
                 ref={tableInputRef}
@@ -213,14 +215,14 @@ export default function NewScriptModal({ onSave, onClose, initialTable }: Props)
             onClick={onClose}
             className="px-4 py-1.5 text-sm text-vs-textDim hover:text-vs-text hover:bg-vs-hover rounded transition-colors"
           >
-            Отмена
+            {t('common.cancel')}
           </button>
           <button
             type="submit"
             disabled={!name.trim() || (scopeType === 'table' && !tableName.trim())}
             className="px-4 py-1.5 text-sm bg-[#0e7490] hover:bg-[#0c6478] text-white rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Создать
+            {t('scripts.createScript')}
           </button>
         </div>
       </form>

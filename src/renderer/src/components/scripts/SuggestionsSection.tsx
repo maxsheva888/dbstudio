@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { ChevronRight, Star, Clock, LayoutGrid, Archive } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useConnections } from '@renderer/context/ConnectionsContext'
 import type { ScriptFile, ScriptSuggestions } from '@shared/types'
 
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export default function SuggestionsSection({ onOpenScript, activeTable }: Props) {
+  const { t } = useTranslation()
   const { activeDatabase, activeConnectionId } = useConnections()
   const [suggestions, setSuggestions] = useState<ScriptSuggestions | null>(null)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
@@ -36,14 +38,14 @@ export default function SuggestionsSection({ onOpenScript, activeTable }: Props)
       {favourites.length > 0 && (
         <SectionGroup
           id="favourites"
-          label="Избранные"
+          label={t('scripts.favorites')}
           icon={<Star size={11} className="text-[#ffd700]" />}
           count={favourites.length}
           collapsed={collapsed.has('favourites')}
           onToggle={() => toggle('favourites')}
         >
           {favourites.map((s) => (
-            <SuggestionRow key={s.id} name={s.name} meta={`${s.runCount} запусков`} onClick={() => onOpenScript(s)} />
+            <SuggestionRow key={s.id} name={s.name} meta={t('scripts.runCount', { count: s.runCount })} onClick={() => onOpenScript(s)} />
           ))}
         </SectionGroup>
       )}
@@ -51,14 +53,14 @@ export default function SuggestionsSection({ onOpenScript, activeTable }: Props)
       {recent.length > 0 && (
         <SectionGroup
           id="recent"
-          label="Недавние"
+          label={t('scripts.recent')}
           icon={<Clock size={11} className="text-[#4a9cd6]" />}
           count={recent.length}
           collapsed={collapsed.has('recent')}
           onToggle={() => toggle('recent')}
         >
           {recent.map((s) => (
-            <SuggestionRow key={s.id} name={s.name} meta={relativeDate(s.lastRunAt)} onClick={() => onOpenScript(s)} />
+            <SuggestionRow key={s.id} name={s.name} meta={relativeDate(s.lastRunAt, t as (key: string, opts?: Record<string, unknown>) => string)} onClick={() => onOpenScript(s)} />
           ))}
         </SectionGroup>
       )}
@@ -66,7 +68,7 @@ export default function SuggestionsSection({ onOpenScript, activeTable }: Props)
       {contextual.length > 0 && (
         <SectionGroup
           id="contextual"
-          label={activeTable ? `Для таблицы: ${activeTable}` : `Для БД: ${activeDatabase}`}
+          label={activeTable ? `${t('scripts.scopeTable')}: ${activeTable}` : `${t('scripts.scopeDb')}: ${activeDatabase}`}
           icon={<LayoutGrid size={11} className="text-[#4ec9b0]" />}
           count={contextual.length}
           collapsed={collapsed.has('contextual')}
@@ -89,6 +91,7 @@ interface ArchiveProps {
 }
 
 export function ArchiveSection({ onOpenScript, activeTable }: ArchiveProps) {
+  const { t } = useTranslation()
   const { activeDatabase, activeConnectionId } = useConnections()
   const [candidates, setCandidates] = useState<(ScriptFile & { lastRunAt: number | null })[]>([])
   const [collapsed, setCollapsed] = useState(false)
@@ -104,7 +107,7 @@ export function ArchiveSection({ onOpenScript, activeTable }: ArchiveProps) {
   return (
     <SectionGroup
       id="archive"
-      label="Архивировать?"
+      label={t('scripts.archiveCandidates')}
       icon={<Archive size={11} className="text-vs-textDim" />}
       count={candidates.length}
       collapsed={collapsed}
@@ -114,7 +117,7 @@ export function ArchiveSection({ onOpenScript, activeTable }: ArchiveProps) {
         <SuggestionRow
           key={s.id}
           name={s.name}
-          meta={s.lastRunAt ? `30+ дней назад` : 'никогда'}
+          meta={s.lastRunAt ? t('scripts.archive30Days') : t('scripts.archiveNever')}
           muted
           onClick={() => onOpenScript(s)}
         />
@@ -179,11 +182,11 @@ function SuggestionRow({
   )
 }
 
-function relativeDate(ts: number): string {
+function relativeDate(ts: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
   const diff = Date.now() - ts
   const mins = Math.floor(diff / 60000)
-  if (mins < 60) return `${mins} мин назад`
+  if (mins < 60) return t('history.relTimeMins', { n: mins })
   const hours = Math.floor(diff / 3600000)
-  if (hours < 24) return `${hours} ч назад`
-  return `${Math.floor(diff / 86400000)} дн назад`
+  if (hours < 24) return t('history.relTimeHours', { n: hours })
+  return t('history.relTimeDays', { n: Math.floor(diff / 86400000) })
 }

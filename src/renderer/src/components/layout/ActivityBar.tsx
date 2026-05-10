@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Server, History, ScrollText, Settings } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import SettingsModal from './SettingsModal'
 
 type Panel = 'connections' | 'history'
@@ -11,22 +12,23 @@ interface Props {
   onOpenDiagram: () => void
 }
 
-const items: { id: Panel; icon: React.ReactNode; label: string }[] = [
-  { id: 'connections', icon: <Server size={24} />, label: 'Подключения' },
-  { id: 'history',     icon: <History size={24} />, label: 'История' }
+const PANEL_ITEMS: { id: Panel; icon: React.ReactNode; labelKey: string }[] = [
+  { id: 'connections', icon: <Server size={24} />, labelKey: 'sidebar.connections' },
+  { id: 'history',     icon: <History size={24} />, labelKey: 'sidebar.history' },
 ]
 
 export default function ActivityBar({ activePanel, onPanelChange, onOpenLog, onOpenDiagram }: Props) {
+  const { t } = useTranslation()
   const [showSettings, setShowSettings] = useState(false)
 
   return (
     <>
       <div className="flex flex-col items-center w-12 bg-vs-activityBar border-r border-vs-border shrink-0">
         <div className="flex-1 flex flex-col">
-          {items.map((item) => (
+          {PANEL_ITEMS.map((item) => (
             <button
               key={item.id}
-              title={item.label}
+              title={t(item.labelKey as any)}
               onClick={() => onPanelChange(item.id)}
               className={`
                 flex items-center justify-center w-12 h-12 mt-1
@@ -41,7 +43,7 @@ export default function ActivityBar({ activePanel, onPanelChange, onOpenLog, onO
             </button>
           ))}
           <button
-            title="Диаграмма схемы"
+            title={t('erd.title')}
             onClick={onOpenDiagram}
             className="flex items-center justify-center w-12 h-12 mt-1 text-vs-textDim hover:text-vs-text transition-colors border-l-2 border-transparent"
           >
@@ -53,14 +55,14 @@ export default function ActivityBar({ activePanel, onPanelChange, onOpenLog, onO
           </button>
         </div>
         <button
-          title="Лог запросов"
+          title={t('queryLog.title')}
           onClick={onOpenLog}
           className="flex items-center justify-center w-12 h-12 text-vs-textDim hover:text-vs-text transition-colors"
         >
           <ScrollText size={22} />
         </button>
         <button
-          title="Настройки"
+          title={t('settings.title')}
           onClick={() => setShowSettings(true)}
           className="flex items-center justify-center w-12 h-12 mb-1 text-vs-textDim hover:text-vs-text transition-colors"
         >

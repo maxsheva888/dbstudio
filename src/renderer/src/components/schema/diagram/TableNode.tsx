@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import type { CanvasTable } from './types'
 import type { ERDColumn } from '@shared/types'
 
@@ -52,6 +53,7 @@ export default function TableNode({
   table, selected, dimmed, highlightCols, hoveredCol, pinnedCol,
   onSelect, onHoverCol, onColClick, onHeaderMouseDown, onDoubleClickHeader, onToggleExpand,
 }: Props) {
+  const { t } = useTranslation()
   const displayedCols = table.expanded
     ? table.cols
     : table.cols.filter((c) => c.pk || c.fk || c.idx || c.uq)
@@ -104,7 +106,7 @@ export default function TableNode({
         </span>
         <button
           onClick={(e) => { e.stopPropagation(); onToggleExpand() }}
-          title={table.expanded ? 'Свернуть' : 'Развернуть'}
+          title={table.expanded ? t('erd.collapse') : t('erd.expand')}
           style={{
             width: 16, height: 16, border: 'none', background: 'transparent',
             color: '#555', cursor: 'pointer', padding: 0, flexShrink: 0,
@@ -186,7 +188,7 @@ export default function TableNode({
             background: '#202021', cursor: 'pointer',
           }}
         >
-          + {hiddenCount} more
+          {t('erd.moreColumns', { count: hiddenCount })}
         </div>
       )}
     </div>

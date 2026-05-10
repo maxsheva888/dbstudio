@@ -4,6 +4,65 @@ import type { DatabaseAdapter } from './adapter'
 
 const MAX_ROWS = 10000
 
+// Split SQL script into individual statements, respecting strings and comments
+function splitStatements(sql: string): string[] {
+  const stmts: string[] = []
+  let buf = ''
+  let i = 0
+
+  while (i < sql.length) {
+    // Line comment
+    if (sql[i] === '-' && sql[i + 1] === '-') {
+      const nl = sql.indexOf('\n', i)
+      if (nl === -1) { buf += sql.slice(i); break }
+      buf += sql.slice(i, nl + 1)
+      i = nl + 1
+      continue
+    }
+    // Block comment
+    if (sql[i] === '/' && sql[i + 1] === '*') {
+      const end = sql.indexOf('*/', i + 2)
+      if (end === -1) { buf += sql.slice(i); break }
+      buf += sql.slice(i, end + 2)
+      i = end + 2
+      continue
+    }
+    // Quoted string / identifier
+    if (sql[i] === "'" || sql[i] === '"' || sql[i] === '`') {
+      const q = sql[i]
+      let j = i + 1
+      while (j < sql.length) {
+        if (sql[j] === '\\') { j += 2; continue }
+        if (sql[j] === q && sql[j + 1] === q) { j += 2; continue }
+        if (sql[j] === q) { j++; break }
+        j++
+      }
+      buf += sql.slice(i, j)
+      i = j
+      continue
+    }
+    // Statement terminator
+    if (sql[i] === ';') {
+      buf += ';'
+      const stmt = buf.trim()
+      if (stmt && hasContent(stmt)) stmts.push(stmt)
+      buf = ''
+      i++
+      continue
+    }
+    buf += sql[i++]
+  }
+
+  const last = buf.trim()
+  if (last && hasContent(last)) stmts.push(last)
+  return stmts
+}
+
+// Returns true if sql contains something other than whitespace and comments
+function hasContent(sql: string): boolean {
+  return sql.replace(/--[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '').trim().length > 0
+}
+
 export class MySQLAdapter implements DatabaseAdapter {
   private pools = new Map<string, mysql.Pool>()
   private host: string
@@ -34,23 +93,56 @@ export class MySQLAdapter implements DatabaseAdapter {
 
   async query(sql: string, database?: string): Promise<QueryResult> {
     const start = Date.now()
-    const [result, fields] = await this.pool(database).query(sql) as
-      [mysql.RowDataPacket[] | mysql.ResultSetHeader, mysql.FieldPacket[]]
-    const durationMs = Date.now() - start
+    const statements = splitStatements(sql)
 
-    if (Array.isArray(result)) {
-      const rows = result as mysql.RowDataPacket[]
-      const truncated = rows.length > MAX_ROWS
-      return {
-        columns: (fields ?? []).map((f) => f.name),
-        rows: rows.slice(0, MAX_ROWS).map((r) => ({ ...r })),
-        rowCount: rows.length,
-        truncated: truncated || undefined,
-        durationMs
-      }
+    if (statements.length === 0) {
+      return { columns: [], rows: [], rowCount: 0, durationMs: 0 }
     }
-    const h = result as mysql.ResultSetHeader
-    return { columns: [], rows: [], rowCount: 0, affectedRows: h.affectedRows, durationMs }
+
+    if (statements.length === 1) {
+      const [result, fields] = await this.pool(database).query(statements[0]) as
+        [mysql.RowDataPacket[] | mysql.ResultSetHeader, mysql.FieldPacket[]]
+      const durationMs = Date.now() - start
+      if (Array.isArray(result)) {
+        const rows = result as mysql.RowDataPacket[]
+        return {
+          columns: (fields ?? []).map((f) => f.name),
+          rows: rows.slice(0, MAX_ROWS).map((r) => ({ ...r })),
+          rowCount: rows.length,
+          truncated: rows.length > MAX_ROWS || undefined,
+          durationMs
+        }
+      }
+      const h = result as mysql.ResultSetHeader
+      return { columns: [], rows: [], rowCount: 0, affectedRows: h.affectedRows, durationMs }
+    }
+
+    // Multi-statement: use a dedicated connection so session variables (@var) persist
+    const conn = await this.pool(database).getConnection()
+    try {
+      let last: QueryResult = { columns: [], rows: [], rowCount: 0, durationMs: 0 }
+      for (const stmt of statements) {
+        const [result, fields] = await conn.query(stmt) as
+          [mysql.RowDataPacket[] | mysql.ResultSetHeader, mysql.FieldPacket[]]
+        if (Array.isArray(result)) {
+          const rows = result as mysql.RowDataPacket[]
+          last = {
+            columns: (fields ?? []).map((f) => f.name),
+            rows: rows.slice(0, MAX_ROWS).map((r) => ({ ...r })),
+            rowCount: rows.length,
+            truncated: rows.length > MAX_ROWS || undefined,
+            durationMs: 0
+          }
+        } else {
+          const h = result as mysql.ResultSetHeader
+          last = { columns: [], rows: [], rowCount: 0, affectedRows: h.affectedRows, durationMs: 0 }
+        }
+      }
+      last.durationMs = Date.now() - start
+      return last
+    } finally {
+      conn.release()
+    }
   }
 
   async getDatabases(): Promise<string[]> {

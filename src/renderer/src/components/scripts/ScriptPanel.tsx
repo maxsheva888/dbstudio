@@ -3,6 +3,7 @@ import {
   FileCode2, Pencil, Trash2, Globe, Database, Table2, Search,
   Archive, ChevronRight, GripVertical, Eye
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useScripts } from '@renderer/context/ScriptsContext'
 import { useConnections } from '@renderer/context/ConnectionsContext'
 import NewScriptModal from './NewScriptModal'
@@ -75,6 +76,7 @@ function loadLayout(): SectionLayout[] {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function ScriptPanel({ onOpenScript, activeTable }: Props) {
+  const { t } = useTranslation()
   const { scripts, createScript, renameScript, deleteScript } = useScripts()
   const { activeConnectionId, activeDatabase } = useConnections()
   const [showModal, setShowModal] = useState(false)
@@ -233,13 +235,13 @@ export default function ScriptPanel({ onOpenScript, activeTable }: Props) {
       return (
         <div className="flex flex-col items-center py-8 gap-2 text-center px-4">
           <FileCode2 size={28} className="text-vs-textDim opacity-40" />
-          <span className="text-sm text-vs-textDim">Нет скриптов</span>
+          <span className="text-sm text-vs-textDim">{t('scripts.noScripts')}</span>
         </div>
       )
     }
 
     if (!hasAnything && search) {
-      return <div className="px-4 py-6 text-center text-xs text-vs-textDim">Ничего не найдено</div>
+      return <div className="px-4 py-6 text-center text-xs text-vs-textDim">{t('commandPalette.noResults')}</div>
     }
 
     return (
@@ -367,7 +369,7 @@ export default function ScriptPanel({ onOpenScript, activeTable }: Props) {
     if (id === 'scripts') return renderScriptsContent()
     if (id === 'archive') {
       return archiveCandidates.length === 0 ? (
-        <div className="px-4 py-3 text-center text-xs text-vs-textDim opacity-60">Нет кандидатов</div>
+        <div className="px-4 py-3 text-center text-xs text-vs-textDim opacity-60">{t('scripts.archiveNoCandidates')}</div>
       ) : (
         archiveCandidates.map((s) => (
           <div key={s.id} className="flex items-center gap-1.5 pl-7 pr-3 py-0.5 cursor-pointer hover:bg-vs-hover text-xs" onClick={() => onOpenScript(s)}>
@@ -382,9 +384,9 @@ export default function ScriptPanel({ onOpenScript, activeTable }: Props) {
   }
 
   function sectionLabel(id: string) {
-    if (id === 'suggestions') return 'Предложения'
-    if (id === 'scripts') return 'Скрипты'
-    if (id === 'archive') return 'Архивировать?'
+    if (id === 'suggestions') return t('scripts.suggestions')
+    if (id === 'scripts') return t('scripts.title')
+    if (id === 'archive') return t('scripts.archiveCandidates')
     return id
   }
 
@@ -415,7 +417,7 @@ export default function ScriptPanel({ onOpenScript, activeTable }: Props) {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск по имени и содержимому…"
+            placeholder={t('scripts.search')}
             className="flex-1 bg-transparent text-xs text-vs-text outline-none placeholder:text-vs-textDim"
           />
           {search && <button onClick={() => setSearch('')} className="text-vs-textDim hover:text-vs-text text-xs">✕</button>}
@@ -428,7 +430,7 @@ export default function ScriptPanel({ onOpenScript, activeTable }: Props) {
           onClick={() => setShowModal(true)}
           className="w-full flex items-center justify-center gap-1.5 px-2 py-1 text-xs text-vs-textDim hover:text-vs-text hover:bg-vs-hover rounded transition-colors"
         >
-          + Новый скрипт
+          + {t('scripts.new')}
         </button>
       </div>
 
@@ -542,6 +544,7 @@ interface RowProps {
 const INDENT_PL: Record<number, string> = { 1: 'pl-4', 2: 'pl-7', 3: 'pl-10' }
 
 function ScriptRow({ script, indent, icon, readonly, isRenaming, renameValue, onRenameChange, onClick, onStartRename, onCommitRename, onDelete }: RowProps) {
+  const { t } = useTranslation()
   return (
     <div
       title={readonly ? 'Только просмотр — нет подключения к базе этого скрипта' : undefined}
@@ -568,10 +571,10 @@ function ScriptRow({ script, indent, icon, readonly, isRenaming, renameValue, on
       )}
       {!isRenaming && (
         <div className="flex gap-1 invisible group-hover:visible shrink-0">
-          <button title="Переименовать" onClick={(e) => { e.stopPropagation(); onStartRename() }} className="p-0.5 hover:text-vs-text">
+          <button title={t('scripts.rename')} onClick={(e) => { e.stopPropagation(); onStartRename() }} className="p-0.5 hover:text-vs-text">
             <Pencil size={11} />
           </button>
-          <button title="Удалить" onClick={(e) => { e.stopPropagation(); onDelete() }} className="p-0.5 hover:text-red-400">
+          <button title={t('scripts.delete')} onClick={(e) => { e.stopPropagation(); onDelete() }} className="p-0.5 hover:text-red-400">
             <Trash2 size={11} />
           </button>
         </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { QueryLogEntry, QueryLogKind, QueryLogStatus, QueryLogGrade, QueryLogPlan } from '@shared/types'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -20,20 +21,20 @@ function fmtTimeShort(ts: number): string {
   return `${h}:${m}:${s}`
 }
 
-function fmtDur(ms: number | null): string {
+function fmtDur(ms: number | null, t: (key: string, opts?: Record<string, unknown>) => string): string {
   if (ms === null || ms === 0) return '—'
-  if (ms < 1000) return `${ms} мс`
-  return `${(ms / 1000).toFixed(2)} с`
+  if (ms < 1000) return `${ms} ${t('results.ms')}`
+  return t('queryLog.sec', { n: (ms / 1000).toFixed(2) })
 }
 
-function sessionDuration(entries: QueryLogEntry[]): string {
-  if (entries.length === 0) return '0 м'
+function sessionDuration(entries: QueryLogEntry[], t: (key: string, opts?: Record<string, unknown>) => string): string {
+  if (entries.length === 0) return t('queryLog.sessionZero')
   const first = entries[entries.length - 1].ranAt
   const ms = Date.now() - first
   const minutes = Math.floor(ms / 60000)
   const hours = Math.floor(minutes / 60)
-  if (hours > 0) return `${hours} ч ${minutes % 60} м`
-  return `${minutes} м`
+  if (hours > 0) return t('queryLog.sessionHoursAndMins', { h: hours, m: minutes % 60 })
+  return t('queryLog.sessionMins', { m: minutes })
 }
 
 // ─── Kind chip ────────────────────────────────────────────────────────────────
@@ -85,22 +86,23 @@ function StatusBadge({ status }: { status: QueryLogStatus }) {
 
 // ─── Grade badge ──────────────────────────────────────────────────────────────
 
-const GRADE_STYLE: Record<QueryLogGrade, { bg: string; fg: string; label: string }> = {
-  A: { bg: '#4ec9b018', fg: '#4ec9b0', label: 'Отлично' },
-  B: { bg: '#569cd618', fg: '#569cd6', label: 'Хорошо' },
-  C: { bg: '#e0af6818', fg: '#e0af68', label: 'Умеренно' },
-  D: { bg: '#f4877118', fg: '#f48771', label: 'Медленно' },
-  F: { bg: '#f4877130', fg: '#f48771', label: 'Критично' },
-  '?': { bg: '#ffffff0a', fg: '#666', label: 'Нет данных' },
+const GRADE_STYLE: Record<QueryLogGrade, { bg: string; fg: string; labelKey: string }> = {
+  A: { bg: '#4ec9b018', fg: '#4ec9b0', labelKey: 'queryLog.gradeA' },
+  B: { bg: '#569cd618', fg: '#569cd6', labelKey: 'queryLog.gradeB' },
+  C: { bg: '#e0af6818', fg: '#e0af68', labelKey: 'queryLog.gradeC' },
+  D: { bg: '#f4877118', fg: '#f48771', labelKey: 'queryLog.gradeD' },
+  F: { bg: '#f4877130', fg: '#f48771', labelKey: 'queryLog.gradeF' },
+  '?': { bg: '#ffffff0a', fg: '#666', labelKey: 'queryLog.gradeUnknown' },
 }
 
 function GradeBadge({ grade }: { grade: QueryLogGrade }) {
-  const { bg, fg, label } = GRADE_STYLE[grade]
+  const { t } = useTranslation()
+  const { bg, fg, labelKey } = GRADE_STYLE[grade]
   return (
     <span className="inline-flex items-center gap-1.5 px-[7px] py-[2px] rounded text-[10px] font-bold"
       style={{ background: bg, color: fg, border: `1px solid ${fg}33` }}>
       <span className="text-[13px] leading-none">{grade}</span>
-      <span className="font-normal text-[9px] tracking-wider uppercase">{label}</span>
+      <span className="font-normal text-[9px] tracking-wider uppercase">{t(labelKey as any)}</span>
     </span>
   )
 }
@@ -159,19 +161,20 @@ const SCAN_LABEL: Record<string, string> = {
 }
 
 function PlanTimeline({ plan }: { plan: QueryLogPlan }) {
+  const { t } = useTranslation()
   const scanColor = SCAN_COLOR[plan.scan] ?? '#666'
   return (
     <div className="flex items-center gap-2 text-[10.5px] font-mono" style={{ color: '#858585' }}>
-      <span className="text-[9px] uppercase tracking-wider font-sans font-medium" style={{ color: '#555' }}>План</span>
+      <span className="text-[9px] uppercase tracking-wider font-sans font-medium" style={{ color: '#555' }}>{t('queryLog.planLabel')}</span>
       <span style={{ color: '#c586c0' }}>parse</span>
       <span>→</span>
       <span style={{ color: '#569cd6' }}>plan</span>
       <span>→</span>
       <span style={{ color: scanColor }}>{SCAN_LABEL[plan.scan] ?? plan.scan}</span>
       <span>→</span>
-      <span style={{ color: '#d4d4d4' }}>fetch · {plan.rows.toLocaleString('ru-RU')} строк</span>
+      <span style={{ color: '#d4d4d4' }}>fetch · {plan.rows.toLocaleString()} {t('queryLog.rows')}</span>
       <div className="flex-1" />
-      <span style={{ color: '#555' }}>cost</span>
+      <span style={{ color: '#555' }}>{t('queryLog.planCost')}</span>
       <span style={{ color: '#4ec9b0' }}>{plan.cost.toFixed(2)}</span>
     </div>
   )
@@ -187,6 +190,7 @@ function QueryDetail({
   onExplain?: () => void
   explaining?: boolean
 }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
 
   function handleCopy() {
@@ -200,14 +204,14 @@ function QueryDetail({
     && !['EXPLAIN', 'CONNECT', 'BEGIN', 'OTHER'].includes(entry.kind ?? 'OTHER')
 
   const meta = [
-    { label: 'Длительность', value: fmtDur(entry.durationMs), color: entry.status === 'slow' ? '#e0af68' : '#d4d4d4', mono: true },
-    { label: 'Строк', value: entry.rowCount !== null ? entry.rowCount.toLocaleString('ru-RU') : '—', color: '#d4d4d4', mono: true },
-    { label: 'База данных', value: entry.database ?? '—', color: '#4ec9b0', mono: true },
-    { label: 'Пользователь', value: entry.user ?? '—', color: '#c586c0', mono: true },
-    { label: 'Источник', value: entry.sourceLabel, color: '#d4d4d4', mono: false },
-    { label: 'Транзакция', value: entry.tx ? 'TX' : '—', color: (entry.tx ?? false) ? '#c586c0' : '#555', mono: true },
-    { label: 'Метод', value: entry.plan ? `${entry.plan.scan} scan` : '—', color: '#d4d4d4', mono: true },
-    { label: 'Cost', value: entry.plan ? entry.plan.cost.toFixed(2) : '—', color: '#4ec9b0', mono: true },
+    { label: t('queryLog.labelDuration'), value: fmtDur(entry.durationMs, t as (key: string, opts?: Record<string, unknown>) => string), color: entry.status === 'slow' ? '#e0af68' : '#d4d4d4', mono: true },
+    { label: t('queryLog.labelRows'), value: entry.rowCount !== null ? entry.rowCount.toLocaleString() : '—', color: '#d4d4d4', mono: true },
+    { label: t('queryLog.labelDatabase'), value: entry.database ?? '—', color: '#4ec9b0', mono: true },
+    { label: t('queryLog.labelUser'), value: entry.user ?? '—', color: '#c586c0', mono: true },
+    { label: t('queryLog.source'), value: entry.sourceLabel, color: '#d4d4d4', mono: false },
+    { label: t('queryLog.labelTx'), value: entry.tx ? 'TX' : '—', color: (entry.tx ?? false) ? '#c586c0' : '#555', mono: true },
+    { label: t('queryLog.labelMethod'), value: entry.plan ? `${entry.plan.scan} scan` : '—', color: '#d4d4d4', mono: true },
+    { label: t('queryLog.labelCost'), value: entry.plan ? entry.plan.cost.toFixed(2) : '—', color: '#4ec9b0', mono: true },
   ]
 
   return (
@@ -233,7 +237,7 @@ function QueryDetail({
                 <path d="M6 5.5 L11 8 L6 10.5 Z" fill="currentColor"/>
               </svg>
             )}
-            Объяснить
+            {t('queryLog.explain')}
           </button>
         )}
         {onOpenSql && (
@@ -245,7 +249,7 @@ function QueryDetail({
             <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
               <path d="M4 3 L13 8 L4 13 Z" fill="currentColor"/>
             </svg>
-            Открыть в редакторе
+            {t('queryLog.openInEditor')}
           </button>
         )}
       </div>
@@ -267,7 +271,7 @@ function QueryDetail({
         <div className="text-[9px] uppercase tracking-wider mb-2 font-sans font-medium" style={{ color: '#555' }}>SQL</div>
         <button
           onClick={handleCopy}
-          title="Копировать SQL"
+          title={t('common.copy') + ' SQL'}
           className="absolute top-2.5 right-2.5 w-6 h-6 flex items-center justify-center rounded transition-colors"
           style={{ background: '#2d2d2d', border: '1px solid #444', color: copied ? '#4ec9b0' : '#858585' }}
         >
@@ -294,7 +298,7 @@ function QueryDetail({
               <path d="M8 4V9M8 11.5V11.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
             </svg>
             <div>
-              <div className="font-semibold mb-1">{entry.status === 'cancelled' ? 'Запрос отменён' : 'Ошибка выполнения'}</div>
+              <div className="font-semibold mb-1">{entry.status === 'cancelled' ? t('queryLog.queryCancelled') : t('queryLog.executionError')}</div>
               <div className="font-mono text-[11px] leading-relaxed">{entry.error}</div>
             </div>
           </div>
@@ -325,6 +329,7 @@ function QueryDetail({
 // ─── Sparkline ────────────────────────────────────────────────────────────────
 
 function Sparkline({ entries }: { entries: QueryLogEntry[] }) {
+  const { t } = useTranslation()
   const last = entries.slice(-20)
   const maxDur = Math.max(...last.map((e) => e.durationMs ?? 0), 1)
   return (
@@ -334,7 +339,7 @@ function Sparkline({ entries }: { entries: QueryLogEntry[] }) {
         const h = Math.max(2, (Math.log(dur + 1) / Math.log(maxDur + 1)) * 20)
         const slow = dur > 1000
         return (
-          <span key={i} title={fmtDur(e.durationMs)}
+          <span key={i} title={fmtDur(e.durationMs, t as (key: string, opts?: Record<string, unknown>) => string)}
             style={{ width: 3, height: h, borderRadius: 1, opacity: 0.8,
               background: e.status === 'error' ? '#f48771' : slow ? '#e0af68' : '#4ec9b0' }} />
         )
@@ -349,6 +354,7 @@ type Filter = 'all' | 'errors' | 'slow' | 'writes'
 type Layout = 'vertical' | 'horizontal'
 
 export default function QueryLogPanel({ onOpenSql }: { onOpenSql?: (sql: string) => void }) {
+  const { t } = useTranslation()
   const [entries, setEntries] = useState<QueryLogEntry[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
@@ -420,7 +426,7 @@ export default function QueryLogPanel({ onOpenSql }: { onOpenSql?: (sql: string)
   }, [selected, explaining])
 
   async function handleClear() {
-    if (!confirm('Очистить весь лог запросов?')) return
+    if (!confirm(t('queryLog.confirmClear'))) return
     await window.api.queryLog.clear()
     setEntries([])
     setSelectedId(null)
@@ -452,10 +458,10 @@ export default function QueryLogPanel({ onOpenSql }: { onOpenSql?: (sql: string)
   }
 
   const FILTERS: { k: Filter; label: string; color?: string }[] = [
-    { k: 'all',    label: 'Все' },
-    { k: 'errors', label: 'Ош.',  color: '#f48771' },
-    { k: 'slow',   label: 'Медл.', color: '#e0af68' },
-    { k: 'writes', label: 'Зап.',  color: '#c586c0' },
+    { k: 'all',    label: t('queryLog.filterAll') },
+    { k: 'errors', label: t('queryLog.filterErrors'), color: '#f48771' },
+    { k: 'slow',   label: t('queryLog.filterSlow'),   color: '#e0af68' },
+    { k: 'writes', label: t('queryLog.filterWrites'), color: '#c586c0' },
   ]
 
   return (
@@ -492,7 +498,7 @@ export default function QueryLogPanel({ onOpenSql }: { onOpenSql?: (sql: string)
             <path d="M10.5 10.5 L13 13" stroke="#666" strokeWidth="1.3" strokeLinecap="round"/>
           </svg>
           <input value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск по SQL…"
+            placeholder={t('queryLog.searchPlaceholder')}
             style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#d4d4d4', fontFamily: 'monospace', fontSize: 10 }}
           />
         </div>
@@ -521,7 +527,7 @@ export default function QueryLogPanel({ onOpenSql }: { onOpenSql?: (sql: string)
         </button>
 
         {/* export */}
-        <button onClick={handleExport} title="Экспорт"
+        <button onClick={handleExport} title={t('queryLog.export')}
           className="w-[22px] h-[22px] flex items-center justify-center rounded transition-colors hover:bg-[#2d2d2d]"
           style={{ border: '1px solid #333', color: '#858585' }}>
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -530,7 +536,7 @@ export default function QueryLogPanel({ onOpenSql }: { onOpenSql?: (sql: string)
         </button>
 
         {/* clear */}
-        <button onClick={handleClear} title="Очистить лог"
+        <button onClick={handleClear} title={t('queryLog.clear')}
           className="w-[22px] h-[22px] flex items-center justify-center rounded transition-colors hover:bg-[#2d2d2d]"
           style={{ border: '1px solid #333', color: '#f48771' }}>
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -553,7 +559,7 @@ export default function QueryLogPanel({ onOpenSql }: { onOpenSql?: (sql: string)
           {/* list header */}
           <div className="grid shrink-0 px-2.5 py-[5px]"
             style={{ gridTemplateColumns: '68px 1fr', borderBottom: '1px solid #3a3a3a', background: '#252526' }}>
-            <span className="text-[9px] uppercase tracking-wider" style={{ color: '#555' }}>Время</span>
+            <span className="text-[9px] uppercase tracking-wider" style={{ color: '#555' }}>{t('queryLog.timeHeader')}</span>
             <span className="text-[9px] uppercase tracking-wider" style={{ color: '#666' }}>SQL</span>
           </div>
 
@@ -561,7 +567,7 @@ export default function QueryLogPanel({ onOpenSql }: { onOpenSql?: (sql: string)
           <div ref={listRef} onScroll={handleListScroll} className="flex-1 overflow-auto" style={{ fontFamily: 'monospace' }}>
             {filtered.length === 0 && (
               <div className="flex items-center justify-center h-16 text-[11px]" style={{ color: '#555' }}>
-                {entries.length === 0 ? 'Лог пуст — запросы появятся здесь…' : 'Нет совпадений'}
+                {entries.length === 0 ? t('queryLog.empty') : t('queryLog.emptyAfterFilter')}
               </div>
             )}
             {filtered.map((e) => {
@@ -597,7 +603,7 @@ export default function QueryLogPanel({ onOpenSql }: { onOpenSql?: (sql: string)
                     {e.durationMs !== null && (
                       <span className="shrink-0 text-[10px] font-mono"
                         style={{ color: (e.status ?? 'ok') === 'slow' ? '#e0af68' : '#555' }}>
-                        {fmtDur(e.durationMs)}
+                        {fmtDur(e.durationMs, t as (key: string, opts?: Record<string, unknown>) => string)}
                       </span>
                     )}
                   </div>
@@ -610,9 +616,9 @@ export default function QueryLogPanel({ onOpenSql }: { onOpenSql?: (sql: string)
           {/* list footer */}
           <div className="flex items-center gap-2 px-2.5 shrink-0 text-[10px]"
             style={{ height: 24, borderTop: '1px solid #2a2a2a', background: '#252526', color: '#555', fontFamily: 'monospace' }}>
-            <span>{filtered.length} записей</span>
+            <span>{t('queryLog.entriesCount', { count: filtered.length })}</span>
             <span>·</span>
-            <span>сессия {sessionDuration(entries)}</span>
+            <span>{t('queryLog.sessionLabel')} {sessionDuration(entries, t as (key: string, opts?: Record<string, unknown>) => string)}</span>
             <div className="flex-1" />
             <span className="flex items-center gap-1.5" style={{ color: '#4ec9b0' }}>
               <span className="w-[5px] h-[5px] rounded-full" style={{ background: '#4ec9b0' }} />
@@ -632,7 +638,7 @@ export default function QueryLogPanel({ onOpenSql }: { onOpenSql?: (sql: string)
             />
           ) : (
             <div className="flex items-center justify-center flex-1 text-[11px]" style={{ color: '#555', background: '#252526' }}>
-              Выберите запрос для просмотра деталей
+              {t('queryLog.selectToView')}
             </div>
           )}
         </div>

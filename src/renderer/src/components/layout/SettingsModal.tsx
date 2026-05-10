@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react'
 import { Sun, Moon, X, Copy, Check } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useSettings } from '@renderer/context/SettingsContext'
 import { useMcp } from '@renderer/context/McpContext'
 import { LANGUAGES } from '@renderer/i18n'
@@ -9,6 +10,7 @@ interface Props {
 }
 
 function CopyButton({ text }: { text: string }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   const copy = useCallback(() => {
     navigator.clipboard.writeText(text).then(() => {
@@ -17,13 +19,14 @@ function CopyButton({ text }: { text: string }) {
     })
   }, [text])
   return (
-    <button onClick={copy} title="Копировать" className="shrink-0 text-vs-textDim hover:text-vs-text transition-colors">
+    <button onClick={copy} title={t('common.copy')} className="shrink-0 text-vs-textDim hover:text-vs-text transition-colors">
       {copied ? <Check size={11} className="text-[#4ec9b0]" /> : <Copy size={11} />}
     </button>
   )
 }
 
 export default function SettingsModal({ onClose }: Props) {
+  const { t } = useTranslation()
   const { theme, setTheme, editorFontSize, setEditorFontSize, mcpPort, setMcpPort, language, setLanguage } = useSettings()
   const { serverRunning, serverPort, activeSession, restartServer } = useMcp()
   const [portInput, setPortInput] = useState(String(mcpPort))
@@ -33,7 +36,7 @@ export default function SettingsModal({ onClose }: Props) {
   const applyPort = useCallback(async () => {
     const p = parseInt(portInput, 10)
     if (isNaN(p) || p < 1024 || p > 65535) {
-      setPortError('Порт должен быть от 1024 до 65535')
+      setPortError(t('settings.mcpPortError'))
       return
     }
     setPortError(null)
@@ -43,9 +46,9 @@ export default function SettingsModal({ onClose }: Props) {
     if (result.success) {
       setMcpPort(p)
     } else {
-      setPortError(result.error ?? 'Не удалось запустить сервер')
+      setPortError(result.error ?? t('settings.mcpPortBusy', { port: p }))
     }
-  }, [portInput, restartServer, setMcpPort])
+  }, [portInput, restartServer, setMcpPort, t])
 
   const cliCmd = `claude mcp add --transport http dbstudio http://localhost:${mcpPort}/mcp`
   const jsonSnippet = `"mcpServers": {\n  "dbstudio": {\n    "type": "http",\n    "url": "http://localhost:${mcpPort}/mcp"\n  }\n}`
@@ -58,7 +61,7 @@ export default function SettingsModal({ onClose }: Props) {
       <div className="w-[460px] bg-vs-sidebar border border-vs-border rounded shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-vs-border">
-          <span className="text-sm font-semibold text-vs-text">Настройки</span>
+          <span className="text-sm font-semibold text-vs-text">{t('settings.title')}</span>
           <button onClick={onClose} className="text-vs-textDim hover:text-vs-text transition-colors">
             <X size={16} />
           </button>
@@ -69,19 +72,19 @@ export default function SettingsModal({ onClose }: Props) {
           {/* Theme */}
           <div className="flex flex-col gap-2">
             <label className="text-xs font-semibold uppercase tracking-wide text-vs-textDim">
-              Тема
+              {t('settings.theme')}
             </label>
             <div className="flex gap-2">
               <ThemeBtn
                 active={theme === 'dark'}
                 icon={<Moon size={14} />}
-                label="Тёмная"
+                label={t('settings.themeDark')}
                 onClick={() => setTheme('dark')}
               />
               <ThemeBtn
                 active={theme === 'light'}
                 icon={<Sun size={14} />}
-                label="Светлая"
+                label={t('settings.themeLight')}
                 onClick={() => setTheme('light')}
               />
             </div>
@@ -90,7 +93,7 @@ export default function SettingsModal({ onClose }: Props) {
           {/* Language */}
           <div className="flex flex-col gap-2">
             <label className="text-xs font-semibold uppercase tracking-wide text-vs-textDim">
-              Language / Язык / Język
+              {t('settings.language')}
             </label>
             <div className="flex gap-2">
               {LANGUAGES.map((lang) => (
@@ -113,7 +116,7 @@ export default function SettingsModal({ onClose }: Props) {
           {/* Font size */}
           <div className="flex flex-col gap-2">
             <label className="text-xs font-semibold uppercase tracking-wide text-vs-textDim">
-              Размер шрифта редактора: <span className="text-[#9cdcfe] normal-case font-normal">{editorFontSize}px</span>
+              {t('settings.editorFontSize')}: <span className="text-[#9cdcfe] normal-case font-normal">{editorFontSize}px</span>
             </label>
             <div className="flex items-center gap-3">
               <input
@@ -146,14 +149,14 @@ export default function SettingsModal({ onClose }: Props) {
           {/* MCP Server */}
           <div className="flex flex-col gap-3">
             <label className="text-xs font-semibold uppercase tracking-wide text-vs-textDim">
-              MCP Server
+              {t('settings.mcpServer')}
             </label>
 
             {/* Status */}
             <div className="flex items-center gap-2 flex-wrap">
               <div className={`w-2 h-2 rounded-full shrink-0 ${serverRunning ? 'bg-[#4ec9b0]' : 'bg-[#f48771]'}`} />
               <span className="text-xs text-vs-textDim">
-                {serverRunning ? `Запущен · порт ${serverPort}` : 'Остановлен'}
+                {serverRunning ? t('settings.mcpRunning', { port: serverPort }) : t('settings.mcpStopped')}
               </span>
               {!serverRunning && (
                 <button
@@ -161,7 +164,7 @@ export default function SettingsModal({ onClose }: Props) {
                   disabled={restarting}
                   className="text-xs text-[#569cd6] hover:underline disabled:opacity-50"
                 >
-                  {restarting ? 'Запуск...' : 'Запустить'}
+                  {restarting ? t('settings.mcpStarting') : t('settings.mcpStart')}
                 </button>
               )}
               {activeSession && (
@@ -172,13 +175,13 @@ export default function SettingsModal({ onClose }: Props) {
             </div>
             {!serverRunning && (
               <div className="text-[10px] text-[#f48771]">
-                Порт {mcpPort} занят другим процессом или произошла ошибка запуска. Измените порт или нажмите «Запустить».
+                {t('settings.mcpPortBusy', { port: mcpPort })}
               </div>
             )}
 
             {/* Port */}
             <div className="flex items-center gap-2">
-              <label className="text-xs text-vs-textDim shrink-0">Порт:</label>
+              <label className="text-xs text-vs-textDim shrink-0">{t('settings.mcpPort')}:</label>
               <input
                 type="number"
                 value={portInput}
@@ -193,14 +196,14 @@ export default function SettingsModal({ onClose }: Props) {
                 disabled={restarting}
                 className="px-2 py-1 text-xs bg-vs-input border border-vs-border rounded text-vs-textDim hover:text-vs-text hover:border-vs-textDim transition-colors disabled:opacity-50"
               >
-                {restarting ? 'Применяю...' : serverRunning ? 'Перезапустить' : 'Запустить'}
+                {restarting ? t('settings.mcpApplying') : serverRunning ? t('settings.mcpRestart') : t('settings.mcpStart')}
               </button>
               {portError && <span className="text-xs text-[#f48771] flex-1">{portError}</span>}
             </div>
 
             {/* Claude Code instructions */}
             <div className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-vs-textDim">Как добавить в Claude Code:</span>
+              <span className="text-xs font-medium text-vs-textDim">{t('settings.mcpHowToAdd')}</span>
 
               <div className="flex items-center gap-2 bg-vs-input rounded p-2 border border-vs-border">
                 <code className="text-[10px] font-mono text-vs-text flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
@@ -209,7 +212,7 @@ export default function SettingsModal({ onClose }: Props) {
                 <CopyButton text={cliCmd} />
               </div>
 
-              <div className="text-[10px] text-vs-textDim">Или вручную в <code className="font-mono">~/.claude/settings.json</code>:</div>
+              <div className="text-[10px] text-vs-textDim">{t('settings.mcpManual')} <code className="font-mono">~/.claude/settings.json</code>:</div>
               <div className="relative bg-vs-input rounded p-2 border border-vs-border">
                 <pre className="text-[10px] font-mono text-vs-text overflow-auto leading-relaxed">{jsonSnippet}</pre>
                 <div className="absolute top-2 right-2">
@@ -218,7 +221,7 @@ export default function SettingsModal({ onClose }: Props) {
               </div>
 
               <div className="text-[10px] text-vs-textDim leading-relaxed">
-                После добавления перезапустите Claude Code. Перед использованием включите MCP на нужной базе в левом дереве.
+                {t('settings.mcpAfterRestart')}
               </div>
             </div>
           </div>
@@ -230,7 +233,7 @@ export default function SettingsModal({ onClose }: Props) {
             onClick={onClose}
             className="px-4 py-1.5 text-sm bg-[#0e7490] hover:bg-[#0c6478] text-white rounded transition-colors"
           >
-            Готово
+            {t('settings.done')}
           </button>
         </div>
       </div>

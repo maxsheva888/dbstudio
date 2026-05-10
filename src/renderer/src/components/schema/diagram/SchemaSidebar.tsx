@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { CanvasTable } from './types'
 
 interface Props {
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export default function SchemaSidebar({ tables, selected, onSelect, hoveredTable }: Props) {
+  const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const selectedItemRef = useRef<HTMLDivElement>(null)
 
@@ -36,7 +38,7 @@ export default function SchemaSidebar({ tables, selected, onSelect, hoveredTable
         letterSpacing: 0.6, fontWeight: 600, flexShrink: 0,
         borderBottom: '1px solid #2d2d30',
       }}>
-        Таблицы
+        {t('erd.tablesList')}
         <span style={{ fontFamily: 'monospace', color: '#555' }}>{tables.length}</span>
       </div>
 
@@ -54,7 +56,7 @@ export default function SchemaSidebar({ tables, selected, onSelect, hoveredTable
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Поиск таблиц..."
+            placeholder={t('schema.searchTables')}
             style={{
               flex: 1, background: 'transparent', border: 'none', outline: 'none',
               color: '#cccccc', fontFamily: 'monospace', fontSize: 11, minWidth: 0,
@@ -117,7 +119,7 @@ export default function SchemaSidebar({ tables, selected, onSelect, hoveredTable
         })}
         {filtered.length === 0 && (
           <div style={{ padding: '12px 12px', color: '#555', fontSize: 11 }}>
-            Нет совпадений
+            {t('schema.noMatches')}
           </div>
         )}
       </div>

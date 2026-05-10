@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import type { CanvasTable } from './types'
 
 const KW = /\b(CREATE|TABLE|ALTER|ADD|CONSTRAINT|FOREIGN KEY|REFERENCES|PRIMARY KEY|NOT NULL|UNIQUE)\b/g
@@ -57,6 +58,7 @@ interface Props {
 }
 
 export default function DDLPanel({ table, onOpenInEditor }: Props) {
+  const { t } = useTranslation()
   if (!table) return null
   const lines = generateDDL(table)
 
@@ -95,7 +97,7 @@ export default function DDLPanel({ table, onOpenInEditor }: Props) {
               color: '#858585', cursor: 'pointer', fontSize: 10,
               fontFamily: 'inherit', padding: '0 4px',
             }}
-            title="Открыть в редакторе"
+            title={t('erd.openInEditor')}
           >
             ↗
           </button>

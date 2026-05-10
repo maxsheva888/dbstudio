@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Database } from 'lucide-react'
 import type { CanvasTable, ERDEdge } from './types'
 import { buildCanvasTables, buildEdges, loadPositions, savePositions, resolveStackOverlaps } from './layout'
@@ -24,6 +25,7 @@ function tableHeight(t: CanvasTable): number {
 }
 
 export default function SchemaDiagramPanel({ connectionId, database, onOpenInEditor }: Props) {
+  const { t } = useTranslation()
   const [tables, setTables] = useState<CanvasTable[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -294,7 +296,7 @@ export default function SchemaDiagramPanel({ connectionId, database, onOpenInEdi
   if (loading) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1e1e1e', color: '#555', fontSize: 12 }}>
-        Загрузка схемы...
+        {t('erd.loading')}
       </div>
     )
   }
@@ -302,7 +304,7 @@ export default function SchemaDiagramPanel({ connectionId, database, onOpenInEdi
   if (error) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1e1e1e', color: '#f48771', fontSize: 12 }}>
-        Ошибка: {error}
+        {t('common.error')}: {error}
       </div>
     )
   }
@@ -321,11 +323,11 @@ export default function SchemaDiagramPanel({ connectionId, database, onOpenInEdi
         <Database size={14} style={{ flexShrink: 0, color: '#c586c0' }} />
         <span style={{ color: '#ffffff', fontWeight: 500 }}>{database}</span>
         <span style={{ color: '#555' }}>·</span>
-        <span style={{ color: '#858585' }}>{tables.length} таблиц · {edges.length} связей</span>
+        <span style={{ color: '#858585' }}>{t('erd.tablesAndEdges', { tables: tables.length, edges: edges.length })}</span>
         <div style={{ flex: 1 }}/>
         <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <button onClick={() => setZoom((z) => Math.max(0.25, +(z - 0.1).toFixed(2)))}
-            style={btnStyle} title="Zoom out">
+            style={btnStyle} title={t('erd.zoomOut')}>
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
               <path d="M3 8 H13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
             </svg>
@@ -334,12 +336,12 @@ export default function SchemaDiagramPanel({ connectionId, database, onOpenInEdi
             {Math.round(zoom * 100)}%
           </span>
           <button onClick={() => setZoom((z) => Math.min(2, +(z + 0.1).toFixed(2)))}
-            style={btnStyle} title="Zoom in">
+            style={btnStyle} title={t('erd.zoomIn')}>
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
               <path d="M8 3 V13 M3 8 H13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
             </svg>
           </button>
-          <button onClick={fit} style={btnStyle} title="Вписать всё">
+          <button onClick={fit} style={btnStyle} title={t('erd.fitAll')}>
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
               <path d="M3 6 V3 H6 M10 3 H13 V6 M13 10 V13 H10 M6 13 H3 V10"
                 stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
@@ -348,7 +350,7 @@ export default function SchemaDiagramPanel({ connectionId, database, onOpenInEdi
           <div style={{ width: 1, height: 14, background: '#333', margin: '0 2px' }}/>
           <button
             onClick={toggleZen}
-            title={zenMode ? 'Выйти из Dzen режима (Esc)' : 'Dzen режим'}
+            title={zenMode ? t('erd.exitZen') : t('erd.zen')}
             style={{
               ...btnStyle,
               width: 'auto', padding: '0 8px',
@@ -372,7 +374,7 @@ export default function SchemaDiagramPanel({ connectionId, database, onOpenInEdi
               }).catch(() => setLoading(false))
             }}
             style={btnStyle}
-            title="Пересчитать расположение"
+            title={t('erd.resetLayout')}
           >
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
               <path d="M2 8 C2 4.7 4.7 2 8 2 C10.2 2 12.2 3.1 13.3 4.8 M14 8 C14 11.3 11.3 14 8 14 C5.8 14 3.8 12.9 2.7 11.2"

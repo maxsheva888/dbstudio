@@ -1,12 +1,5 @@
 /// <reference types="vite/client" />
 
-type UpdaterEvent =
-  | { type: 'checking' }
-  | { type: 'available'; version: string }
-  | { type: 'not-available' }
-  | { type: 'downloading'; percent: number }
-  | { type: 'ready'; version: string }
-  | { type: 'error'; message: string }
 import type {
   ConnectionConfig, TestConnectionResult,
   TableInfo, ColumnInfo, QueryResult,
@@ -16,6 +9,14 @@ import type {
 } from '@shared/types'
 
 declare global {
+  type UpdaterEvent =
+    | { type: 'checking' }
+    | { type: 'available'; version: string }
+    | { type: 'not-available' }
+    | { type: 'downloading'; percent: number }
+    | { type: 'ready'; version: string }
+    | { type: 'error'; message: string }
+
   interface Window {
     api: {
       app: {

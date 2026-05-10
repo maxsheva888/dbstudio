@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { FileCode2, Server, Plus, Sun, Moon, Plug, PlugZap } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useScripts } from '@renderer/context/ScriptsContext'
 import { useConnections } from '@renderer/context/ConnectionsContext'
 import { useSettings } from '@renderer/context/SettingsContext'
@@ -41,6 +42,7 @@ function fuzzyScore(query: string, text: string): number {
 }
 
 export default function CommandPalette({ onClose, onOpenScript, onNewTab }: Props) {
+  const { t } = useTranslation()
   const { scripts } = useScripts()
   const { connections, activeConnectionId, connect, disconnect } = useConnections()
   const { theme, setTheme } = useSettings()
@@ -58,7 +60,7 @@ export default function CommandPalette({ onClose, onOpenScript, onNewTab }: Prop
     if (!query || fuzzyMatch(query, 'новая вкладка new tab')) {
       result.push({
         id: '__new_tab',
-        label: 'Новая вкладка',
+        label: t('editor.newTab'),
         description: 'Ctrl+T',
         icon: <Plus size={14} className="text-vs-textDim" />,
         action: () => { onNewTab(); onClose() }
@@ -68,7 +70,7 @@ export default function CommandPalette({ onClose, onOpenScript, onNewTab }: Prop
     if (!query || fuzzyMatch(query, 'тема theme переключить')) {
       result.push({
         id: '__theme',
-        label: theme === 'dark' ? 'Переключить на светлую тему' : 'Переключить на тёмную тему',
+        label: theme === 'dark' ? t('commandPalette.switchToLight') : t('commandPalette.switchToDark'),
         icon: theme === 'dark'
           ? <Sun size={14} className="text-[#ffd700]" />
           : <Moon size={14} className="text-vs-textDim" />,
@@ -86,7 +88,7 @@ export default function CommandPalette({ onClose, onOpenScript, onNewTab }: Prop
       result.push({
         id: `script:${s.id}`,
         label: s.name,
-        description: scopeLabel(s.scope),
+        description: scopeLabel(s.scope, t),
         icon: <FileCode2 size={14} className="text-[#4ec9b0]" />,
         action: () => { onOpenScript(s); onClose() }
       })
@@ -101,7 +103,7 @@ export default function CommandPalette({ onClose, onOpenScript, onNewTab }: Prop
       const isActive = c.id === activeConnectionId
       result.push({
         id: `conn:${c.id}`,
-        label: isActive ? `Отключиться от ${c.name}` : `Подключиться к ${c.name}`,
+        label: isActive ? t('commandPalette.disconnectFrom', { name: c.name }) : t('commandPalette.connectTo', { name: c.name }),
         description: `${c.user}@${c.host}:${c.port}`,
         icon: isActive
           ? <PlugZap size={14} className="text-[#4ec9b0]" />
@@ -115,7 +117,7 @@ export default function CommandPalette({ onClose, onOpenScript, onNewTab }: Prop
     }
 
     return result
-  }, [query, scripts, connections, activeConnectionId, theme])
+  }, [query, scripts, connections, activeConnectionId, theme, t])
 
   useEffect(() => { setSelected(0) }, [query])
 
@@ -149,16 +151,16 @@ export default function CommandPalette({ onClose, onOpenScript, onNewTab }: Prop
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Поиск команд, скриптов, подключений…"
+            placeholder={t('commandPalette.placeholder')}
             className="flex-1 bg-transparent text-vs-text text-sm outline-none placeholder:text-vs-textDim"
           />
-          <span className="text-xs text-vs-textDim">Esc — закрыть</span>
+          <span className="text-xs text-vs-textDim">{t('commandPalette.escClose')}</span>
         </div>
 
         {/* Items */}
         <div ref={listRef} className="max-h-80 overflow-y-auto py-1">
           {items.length === 0 && (
-            <div className="px-4 py-6 text-center text-xs text-vs-textDim">Ничего не найдено</div>
+            <div className="px-4 py-6 text-center text-xs text-vs-textDim">{t('commandPalette.noResults')}</div>
           )}
           {items.map((item, i) => (
             <div
@@ -183,9 +185,9 @@ export default function CommandPalette({ onClose, onOpenScript, onNewTab }: Prop
   )
 }
 
-function scopeLabel(scope: string): string {
-  if (scope === 'global') return 'Глобальный'
-  if (scope.startsWith('db:')) return `БД: ${scope.slice(3)}`
-  if (scope.startsWith('table:')) return `Таблица: ${scope.slice(6)}`
+function scopeLabel(scope: string, t: (key: string) => string): string {
+  if (scope === 'global') return t('scripts.scopeGlobal')
+  if (scope.startsWith('db:')) return `${t('scripts.scopeDb')}: ${scope.slice(3)}`
+  if (scope.startsWith('table:')) return `${t('scripts.scopeTable')}: ${scope.slice(6)}`
   return scope
 }

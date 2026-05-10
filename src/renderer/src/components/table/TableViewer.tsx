@@ -4,6 +4,7 @@ import {
   Table2, Copy, ChevronUp, ChevronDown, RefreshCw,
   ExternalLink, ArrowRight,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { ColumnInfo, IndexInfo, ForeignKeyInfo, QueryResult } from '@shared/types'
 import ResultsGrid from '../results/ResultsGrid'
 
@@ -21,12 +22,12 @@ type SaveState = 'idle' | 'saving' | 'saved'
 type EditRecord = { from: unknown; to: string | null }
 type PendingEdits = Map<number, Record<string, EditRecord>>
 
-const TABS: { k: TabKey; label: string }[] = [
-  { k: 'structure', label: 'Структура' },
-  { k: 'data', label: 'Данные' },
-  { k: 'indexes', label: 'Индексы' },
-  { k: 'fk', label: 'Внешние ключи' },
-  { k: 'ddl', label: 'DDL' },
+const TABS: { k: TabKey; labelKey: string }[] = [
+  { k: 'structure', labelKey: 'tableViewer.structure' },
+  { k: 'data', labelKey: 'tableViewer.data' },
+  { k: 'indexes', labelKey: 'tableViewer.indexes' },
+  { k: 'fk', labelKey: 'tableViewer.foreignKeys' },
+  { k: 'ddl', labelKey: 'tableViewer.ddl' },
 ]
 
 function sqlLiteral(v: unknown): string {
@@ -37,12 +38,8 @@ function sqlLiteral(v: unknown): string {
   return `'${String(v).replace(/'/g, "''")}'`
 }
 
-function declEdit(n: number): string {
-  const m = n % 100, k = n % 10
-  if (m >= 11 && m <= 14) return `${n} изм.`
-  if (k === 1) return `${n} изм.`
-  if (k >= 2 && k <= 4) return `${n} изм.`
-  return `${n} изм.`
+function declEdit(n: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
+  return t('tableViewer.editCount', { count: n })
 }
 
 // ── Column kind icon ────────────────────────────────────────────────────────
@@ -86,6 +83,7 @@ function InlinePendingBar({
   onDiscard: () => void
   onShowDiff: () => void
 }) {
+  const { t } = useTranslation()
   const isSaving = saveState === 'saving'
   const isSaved  = saveState === 'saved'
   const showBar  = editCellCount > 0 || isSaving || isSaved
@@ -113,9 +111,9 @@ function InlinePendingBar({
               <span className="w-[7px] h-[7px] rounded-full bg-[#c586c0] animate-pulse shrink-0" />
             )}
             <span className={`font-medium whitespace-nowrap ${isSaved ? 'text-[#4ec9b0]' : 'text-vs-text'}`}>
-              {isSaving ? 'Сохранение…'
-                : isSaved ? `Сохранено · ${lastSavedCount}`
-                : declEdit(editCellCount)}
+              {isSaving ? t('tableViewer.saving')
+                : isSaved ? `${t('tableViewer.saved')} · ${lastSavedCount}`
+                : declEdit(editCellCount, t as (key: string, opts?: Record<string, unknown>) => string)}
             </span>
           </div>
 
@@ -124,7 +122,7 @@ function InlinePendingBar({
               <button
                 onClick={onShowDiff}
                 className="flex items-center gap-1.5 px-2 border-r border-vs-border text-vs-textDim hover:bg-vs-hover transition-colors"
-                title="Просмотр изменений"
+                title={t('tableViewer.viewChanges')}
               >
                 <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                   <path d="M3 4H13M3 8H10M3 12H13" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
@@ -135,23 +133,23 @@ function InlinePendingBar({
               <button
                 onClick={onDiscard}
                 className="flex items-center gap-1.5 px-2 border-r border-vs-border text-vs-textDim hover:text-[#f48771] hover:bg-vs-hover transition-colors"
-                title="Отменить все изменения"
+                title={t('tableViewer.discardAll')}
               >
                 <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
                   <path d="M4 4L12 12M12 4L4 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
                 </svg>
-                Отменить
+                {t('common.cancel')}
               </button>
 
               <button
                 onClick={onSave}
                 className="flex items-center gap-1.5 px-2.5 bg-vs-accent hover:opacity-80 text-white font-medium transition-opacity whitespace-nowrap"
-                title="Сохранить изменения (Ctrl+S / ⌘S)"
+                title={t('tableViewer.saveTitle')}
               >
                 <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
                   <path d="M3 3H11L13 5V13H3ZM5 3V7H10V3M5 13V9H11V13" stroke="#fff" strokeWidth="1.3" strokeLinejoin="round"/>
                 </svg>
-                Сохранить
+                {t('common.save')}
                 <span className="text-[9px] px-1 rounded bg-black/25 font-mono leading-tight">⌘S</span>
               </button>
             </>
@@ -172,8 +170,8 @@ function InlinePendingBar({
             : 'border-[#c586c044] text-[#c586c0] bg-[#c586c010] hover:bg-[#c586c020]'
         }`}
         title={isProtected
-          ? 'Защита включена — только просмотр. Нажмите чтобы включить редактирование'
-          : 'Режим редактирования активен. Нажмите чтобы вернуть защиту'}
+          ? t('tableViewer.protectionOnTitle')
+          : t('tableViewer.protectionOffTitle')}
       >
         {isProtected ? (
           <>
@@ -183,14 +181,14 @@ function InlinePendingBar({
               <path d="M5.6 8L7.4 9.8L10.6 6.4"
                 stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            Защита
+            {t('tableViewer.protection')}
           </>
         ) : (
           <>
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
               <path d="M3 13L3 11L11 3L13 5L5 13Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
             </svg>
-            Редактирование
+            {t('tableViewer.editingMode')}
           </>
         )}
       </button>
@@ -211,6 +209,7 @@ function DiffReview({
   onClose: () => void
   onRevert: (rowIdx: number, col: string) => void
 }) {
+  const { t } = useTranslation()
   const entries: { rowIdx: number; col: string; from: unknown; to: string | null }[] = []
   for (const [rowIdx, edits] of pendingEdits.entries()) {
     for (const [col, edit] of Object.entries(edits)) {
@@ -240,7 +239,7 @@ function DiffReview({
       style={{ background: '#252526', border: '1px solid #454545' }}
     >
       <div className="flex items-center gap-2 px-3 py-2 shrink-0" style={{ borderBottom: '1px solid #3a3a3a', background: '#2d2d2d' }}>
-        <span className="text-[#d4d4d4] font-medium text-[12px]">Несохранённые изменения</span>
+        <span className="text-[#d4d4d4] font-medium text-[12px]">{t('tableViewer.unsavedChanges')}</span>
         <span className="px-1.5 py-0.5 rounded bg-[#c586c022] text-[#c586c0] text-[9px] font-bold tracking-wider">
           {entries.length}
         </span>
@@ -272,7 +271,7 @@ function DiffReview({
               onClick={() => onRevert(e.rowIdx, e.col)}
               className="shrink-0 text-[10px] px-1 font-sans text-[#858585] hover:text-[#f48771] transition-colors"
             >
-              ↩ откатить
+              ↩ {t('tableViewer.revertChange')}
             </button>
           </div>
         ))}
@@ -291,12 +290,13 @@ function DiffReview({
 // ── Structure tab ──────────────────────────────────────────────────────────
 
 function StructureTab({ columns }: { columns: ColumnInfo[] }) {
+  const { t } = useTranslation()
   return (
     <div className="flex-1 overflow-auto">
       <table className="w-full border-collapse text-[11px] font-mono">
         <thead className="sticky top-0 z-10">
           <tr className="bg-vs-panel border-b border-vs-borderStrong">
-            {['#', '', 'Имя', 'Тип', 'NN', 'Default', 'Ключи', 'Ссылка'].map((h, i) => (
+            {['#', '', t('tableViewer.colName'), t('tableViewer.colType'), t('tableViewer.colNotNull'), t('tableViewer.colDefault'), t('tableViewer.colKeys'), t('tableViewer.colRef')].map((h, i) => (
               <th key={i} className="text-left px-2.5 py-1.5 text-[10px] uppercase tracking-wider text-vs-textDim font-medium whitespace-nowrap">
                 {h}
               </th>
@@ -370,6 +370,7 @@ function DataTab({
   initialWhereClause = '', initialOrderBy = '', initialLimit = 200,
   onCellChange, onRevertCell, onResultChange, onFilterStateChange, onSave,
 }: DataTabProps) {
+  const { t } = useTranslation()
   const [result, setResult] = useState<QueryResult | undefined>()
   const [error, setError] = useState<string | undefined>()
   const [loading, setLoading] = useState(true)
@@ -377,8 +378,11 @@ function DataTab({
   const [orderBy, setOrderBy] = useState(initialOrderBy)
   const [limit, setLimit] = useState(initialLimit)
   const [page, setPage] = useState(0)
+  const [totalCount, setTotalCount] = useState<number | null>(null)
+  const [limitInput, setLimitInput] = useState(String(initialLimit))
   const inputRef = useRef<HTMLInputElement>(null)
   const runQueryRef = useRef<(p?: number) => Promise<void>>(async () => {})
+  const runCountRef = useRef<() => Promise<void>>(async () => {})
 
   const runQuery = useCallback(async (targetPage?: number) => {
     const p = targetPage ?? page
@@ -390,7 +394,7 @@ function DataTab({
       if (whereClause.trim()) sql += ` WHERE ${whereClause}`
       if (orderBy.trim()) sql += ` ORDER BY ${orderBy}`
       sql += ` LIMIT ${limit} OFFSET ${p * limit}`
-      const r = await window.api.query.execute(connectionId, database, sql, `${table} · Данные`, undefined, true)
+      const r = await window.api.query.execute(connectionId, database, sql, t('tableViewer.dataQueryLabel', { table }), undefined, true)
       setResult(r)
       onResultChange(r)
     } catch (e) {
@@ -401,14 +405,38 @@ function DataTab({
     }
   }, [connectionId, database, table, whereClause, orderBy, limit, page, onResultChange])
 
+  const runCount = useCallback(async () => {
+    try {
+      const quotedTbl = `\`${table.replace(/`/g, '')}\``
+      let sql = `SELECT COUNT(*) FROM ${quotedTbl}`
+      if (whereClause.trim()) sql += ` WHERE ${whereClause}`
+      const r = await window.api.query.execute(connectionId, database, sql, '', undefined, true)
+      const val = r.rows[0] ? Object.values(r.rows[0])[0] : null
+      setTotalCount(val != null ? Number(val) : null)
+    } catch {
+      setTotalCount(null)
+    }
+  }, [connectionId, database, table, whereClause])
+
   useEffect(() => { runQueryRef.current = runQuery }, [runQuery])
-  useEffect(() => { runQuery() }, []) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (refreshTrigger > 0) { setPage(0); runQueryRef.current(0) } }, [refreshTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { runCountRef.current = runCount }, [runCount])
+  useEffect(() => { runQuery(); runCount() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (refreshTrigger > 0) { setPage(0); runQueryRef.current(0); runCountRef.current() } }, [refreshTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setPage(0) }, [limit]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { onFilterStateChange?.({ whereClause, orderBy, limit }) }, [whereClause, orderBy, limit]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function handleRefresh() { setPage(0); runQuery(0) }
-  function handleEnter() { setPage(0); runQuery(0) }
+  function applyLimit(raw: string) {
+    const n = parseInt(raw, 10)
+    const applied = n > 0 ? n : 200
+    setLimitInput(String(applied))
+    setLimit(applied)
+    setPage(0)
+    runQueryRef.current(0)
+    runCountRef.current()
+  }
+
+  function handleRefresh() { setPage(0); runQuery(0); runCount() }
+  function handleEnter() { setPage(0); runQuery(0); runCount() }
   function goToPage(np: number) { setPage(np); runQuery(np) }
 
   // Ctrl/Cmd+S
@@ -444,7 +472,7 @@ function DataTab({
           value={whereClause}
           onChange={(e) => setWhereClause(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') handleEnter() }}
-          placeholder="id = 1  или  name LIKE '%foo%'"
+          placeholder={t('tableViewer.whereExamples')}
           className="flex-1 max-w-[340px] h-[22px] bg-vs-input border border-vs-border rounded px-2 font-mono text-[11px] text-vs-text placeholder:text-vs-textMuted outline-none focus:border-vs-accent"
         />
         <span className="text-vs-textMuted font-mono text-[10px]">ORDER BY</span>
@@ -457,22 +485,23 @@ function DataTab({
         />
         <div className="flex-1" />
         <span className="text-vs-textMuted font-mono text-[10px]">LIMIT</span>
-        <select
-          value={limit}
-          onChange={(e) => setLimit(Number(e.target.value))}
-          className="h-[22px] bg-vs-input border border-vs-border rounded px-1 font-mono text-[11px] text-vs-text outline-none"
-        >
-          {[50, 100, 200, 500, 1000, 5000].map((n) => (
-            <option key={n} value={n}>{n}</option>
-          ))}
-        </select>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={limitInput}
+          onChange={(e) => setLimitInput(e.target.value.replace(/\D/g, ''))}
+          onKeyDown={(e) => { if (e.key === 'Enter') applyLimit(limitInput) }}
+          onBlur={() => applyLimit(limitInput)}
+          placeholder="200"
+          className="w-[52px] h-[22px] bg-vs-input border border-vs-border rounded px-2 font-mono text-[11px] text-vs-text placeholder:text-vs-textMuted outline-none focus:border-vs-accent text-center"
+        />
         {/* pagination */}
         <div className="flex items-center gap-0.5">
           <button
             onClick={() => goToPage(page - 1)}
             disabled={page === 0 || loading}
             className="h-[22px] w-[22px] flex items-center justify-center rounded text-vs-textDim hover:text-vs-text hover:bg-vs-hover disabled:opacity-30 disabled:cursor-default transition-colors"
-            title="Предыдущая страница"
+            title={t('tableViewer.prevPage')}
           >
             ‹
           </button>
@@ -483,7 +512,7 @@ function DataTab({
             onClick={() => goToPage(page + 1)}
             disabled={!hasNextPage || loading}
             className="h-[22px] w-[22px] flex items-center justify-center rounded text-vs-textDim hover:text-vs-text hover:bg-vs-hover disabled:opacity-30 disabled:cursor-default transition-colors"
-            title="Следующая страница"
+            title={t('tableViewer.nextPage')}
           >
             ›
           </button>
@@ -493,12 +522,13 @@ function DataTab({
           className="h-[22px] px-2.5 rounded bg-vs-accent text-white text-[10px] font-medium hover:opacity-80 flex items-center gap-1"
         >
           <RefreshCw size={10} />
-          Обновить
+          {t('tableViewer.refresh')}
         </button>
         {!loading && (
           <span className="text-[#4ec9b0] font-mono text-[10px]">
-            ● {rowCount} {rowCount === 1 ? 'строка' : rowCount < 5 ? 'строки' : 'строк'}
-            {result?.durationMs != null ? ` · ${result.durationMs} мс` : ''}
+            ● {t('tableViewer.rowsLoaded', { count: rowCount })}
+            {totalCount !== null ? ` · ${t('tableViewer.totalRows', { count: totalCount.toLocaleString() })}` : ''}
+            {result?.durationMs != null ? ` · ${result.durationMs} ${t('results.ms')}` : ''}
           </span>
         )}
       </div>
@@ -511,15 +541,15 @@ function DataTab({
             <path d="M8 6V10" stroke="#c586c0" strokeWidth="1.4" strokeLinecap="round"/>
             <circle cx="8" cy="12" r="0.8" fill="#c586c0"/>
           </svg>
-          <span className="text-[#c586c0]">Режим редактирования — двойной клик на ячейку. PK-колонки не редактируются.</span>
+          <span className="text-[#c586c0]">{t('tableViewer.editModeHint')}</span>
           <div className="flex-1" />
           <span className="text-vs-textMuted font-mono flex items-center gap-0.5">
             <kbd className="inline-block px-1.5 bg-vs-input border border-vs-border rounded text-[9px] font-bold">Enter</kbd>
-            <span className="mx-0.5">сохранить ·</span>
+            <span className="mx-0.5">{t('common.save')} ·</span>
             <kbd className="inline-block px-1.5 bg-vs-input border border-vs-border rounded text-[9px] font-bold">Esc</kbd>
-            <span className="mx-0.5">отменить ·</span>
+            <span className="mx-0.5">{t('common.cancel')} ·</span>
             <kbd className="inline-block px-1.5 bg-vs-input border border-vs-border rounded text-[9px] font-bold">⌘S</kbd>
-            <span className="ml-0.5">сохранить всё</span>
+            <span className="ml-0.5">{t('common.save')}</span>
           </span>
         </div>
       )}
@@ -544,6 +574,7 @@ function DataTab({
 // ── Indexes tab ─────────────────────────────────────────────────────────────
 
 function IndexesTab({ indexes }: { indexes: IndexInfo[] }) {
+  const { t } = useTranslation()
   function kindStyle(k: string) {
     if (k === 'PK') return 'bg-[#ffd70022] text-[#ffd700]'
     if (k === 'UNIQUE') return 'bg-[#f4877122] text-[#f48771]'
@@ -554,7 +585,7 @@ function IndexesTab({ indexes }: { indexes: IndexInfo[] }) {
       <table className="w-full border-collapse text-[11px] font-mono">
         <thead className="sticky top-0 z-10">
           <tr className="bg-vs-panel border-b border-vs-borderStrong">
-            {['', 'Имя', 'Колонки', 'Тип', 'Уникальный', 'NULL', 'Cardinality'].map((h, i) => (
+            {['', t('tableViewer.colName'), t('tableViewer.colColumns'), t('tableViewer.colType'), t('tableViewer.colUnique'), 'NULL', 'Cardinality'].map((h, i) => (
               <th key={i} className="text-left px-2.5 py-1.5 text-[10px] uppercase tracking-wider text-vs-textDim font-medium whitespace-nowrap">{h}</th>
             ))}
           </tr>
@@ -596,12 +627,12 @@ function IndexesTab({ indexes }: { indexes: IndexInfo[] }) {
         </tbody>
       </table>
       {indexes.length === 0 && (
-        <div className="flex items-center justify-center h-20 text-vs-textMuted text-[11px]">Нет индексов</div>
+        <div className="flex items-center justify-center h-20 text-vs-textMuted text-[11px]">{t('tableViewer.noIndexes')}</div>
       )}
       <div className="mx-3 mt-3 px-3 py-2 border border-dashed border-vs-border rounded text-[11px] text-vs-textDim flex items-center gap-2">
-        <span className="text-[#4ec9b0] text-sm">+</span>Добавить индекс
+        <span className="text-[#4ec9b0] text-sm">+</span>{t('tableViewer.addIndex')}
         <span className="ml-auto font-mono text-[10px] text-vs-textMuted">
-          {indexes.length} {indexes.length === 1 ? 'индекс' : indexes.length < 5 ? 'индекса' : 'индексов'}
+          {t('tableViewer.indexCount', { count: indexes.length })}
           {' · '}{indexes.filter((i) => i.kind === 'PK').length} PK
           {' · '}{indexes.filter((i) => i.kind === 'UNIQUE').length} UNIQUE
           {' · '}{indexes.filter((i) => i.kind === 'INDEX').length} INDEX
@@ -618,6 +649,7 @@ function ForeignKeysTab({ fks, table, onNavigateToTable }: {
   table: string
   onNavigateToTable?: (table: string) => void
 }) {
+  const { t } = useTranslation()
   const [expandedFk, setExpandedFk] = useState<string | null>(null)
 
   function actionStyle(action: string) {
@@ -633,7 +665,7 @@ function ForeignKeysTab({ fks, table, onNavigateToTable }: {
       <table className="w-full border-collapse text-[11px] font-mono">
         <thead className="sticky top-0 z-10">
           <tr className="bg-vs-panel border-b border-vs-borderStrong">
-            {['', 'Имя ограничения', 'Колонки', '', 'Целевая таблица', 'Колонки', 'ON UPDATE', 'ON DELETE', ''].map((h, i) => (
+            {['', t('tableViewer.constraintName'), t('tableViewer.colColumns'), '', t('tableViewer.targetTable'), t('tableViewer.colColumns'), 'ON UPDATE', 'ON DELETE', ''].map((h, i) => (
               <th key={i} className="text-left px-2.5 py-1.5 text-[10px] uppercase tracking-wider text-vs-textDim font-medium whitespace-nowrap">{h}</th>
             ))}
           </tr>
@@ -673,7 +705,7 @@ function ForeignKeysTab({ fks, table, onNavigateToTable }: {
                 {isExpanded && (
                   <tr className="border-b border-vs-border">
                     <td colSpan={9} className="px-3 py-4 bg-vs-bg">
-                      <div className="text-[10px] uppercase tracking-wider text-vs-textDim mb-3">Связь на диаграмме</div>
+                      <div className="text-[10px] uppercase tracking-wider text-vs-textDim mb-3">{t('tableViewer.fkDiagram')}</div>
                       <div className="flex items-center gap-4">
                         <div className="border border-[#c586c088] rounded bg-vs-bg font-mono text-[11px] min-w-[160px]">
                           <div className="px-2.5 py-1.5 bg-[#c586c018] text-[#c586c0] border-b border-vs-border font-semibold">{table}</div>
@@ -702,7 +734,7 @@ function ForeignKeysTab({ fks, table, onNavigateToTable }: {
                       <div className="mt-3 flex gap-2">
                         <button onClick={() => onNavigateToTable?.(fk.refTable)}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-vs-border text-[11px] text-vs-textDim hover:border-vs-accent hover:text-vs-accent transition-colors">
-                          <ExternalLink size={11} />Открыть {fk.refTable}
+                          <ExternalLink size={11} />{t('tableViewer.openTable', { table: fk.refTable })}
                         </button>
                         <button onClick={() => {
                           const cols = fk.columns.map((c) => `\`${c}\``).join(', ')
@@ -710,7 +742,7 @@ function ForeignKeysTab({ fks, table, onNavigateToTable }: {
                           navigator.clipboard.writeText(`SELECT t.*, r.*\nFROM \`${table}\` t\nJOIN \`${fk.refTable}\` r ON r.${refCols} = t.${cols}\nLIMIT 100;`)
                         }}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-vs-border text-[11px] text-vs-textDim hover:border-vs-accent hover:text-vs-accent transition-colors">
-                          <Copy size={11} />Скопировать JOIN SQL
+                          <Copy size={11} />{t('tableViewer.copyJoinSQL')}
                         </button>
                       </div>
                     </td>
@@ -723,7 +755,7 @@ function ForeignKeysTab({ fks, table, onNavigateToTable }: {
       </table>
       {fks.length === 0 && (
         <div className="flex flex-col items-center justify-center h-24 text-vs-textMuted text-[11px] gap-1">
-          <Link2 size={20} className="opacity-30" />Нет внешних ключей
+          <Link2 size={20} className="opacity-30" />{t('tableViewer.noForeignKeys')}
         </div>
       )}
     </div>
@@ -736,6 +768,7 @@ function DdlTab({ ddl, database, table, onOpenInEditor }: {
   ddl: string; database: string; table: string
   onOpenInEditor?: (sql: string) => void
 }) {
+  const { t } = useTranslation()
   const KEYWORDS = new Set(['CREATE','TABLE','VIEW','PRIMARY','KEY','UNIQUE','FOREIGN','REFERENCES','NOT','NULL','DEFAULT',
     'AUTO_INCREMENT','ON','UPDATE','DELETE','RESTRICT','CASCADE','ENGINE','CHARSET','COLLATE','ROW_FORMAT',
     'COMMENT','CONSTRAINT','CURRENT_TIMESTAMP','IF','EXISTS','INDEX','SET','NO','ACTION'])
@@ -783,12 +816,12 @@ function DdlTab({ ddl, database, table, onOpenInEditor }: {
         <div className="flex-1" />
         <button onClick={() => navigator.clipboard.writeText(displaySql)}
           className="px-2.5 py-1 rounded border border-vs-border text-[10px] text-vs-textDim hover:text-vs-text hover:border-vs-accent transition-colors flex items-center gap-1">
-          <Copy size={10} />Копировать
+          <Copy size={10} />{t('tableViewer.copyDDL')}
         </button>
         {onOpenInEditor && (
           <button onClick={() => onOpenInEditor(displaySql)}
             className="px-2.5 py-1 rounded text-[10px] text-white bg-vs-accent hover:opacity-80 flex items-center gap-1">
-            <ExternalLink size={10} />Открыть в редакторе
+            <ExternalLink size={10} />{t('tableViewer.openInEditor')}
           </button>
         )}
       </div>
@@ -801,9 +834,9 @@ function DdlTab({ ddl, database, table, onOpenInEditor }: {
         </div>
       </div>
       <div className="h-[22px] border-t border-vs-border bg-vs-panel flex items-center px-2.5 gap-3 text-[10px] text-vs-textMuted font-mono shrink-0">
-        <span>SQL</span><span>·</span><span>{displayLines.length} строк</span>
+        <span>SQL</span><span>·</span><span>{displayLines.length} {t('queryLog.rows')}</span>
         <div className="flex-1" />
-        {ddl && <span className="text-[#4ec9b0]">● синтаксис проверен</span>}
+        {ddl && <span className="text-[#4ec9b0]">● {t('tableViewer.ddlSyntaxOk')}</span>}
       </div>
     </div>
   )
@@ -815,6 +848,7 @@ export default function TableViewer({ connectionId, database, table, savedState,
   onOpenSql?: (sql: string) => void
   onNavigateToTable?: (database: string, table: string) => void
 }) {
+  const { t } = useTranslation()
   const [tab, setTab] = useState<TabKey>((savedState?.activeSubTab as TabKey) ?? 'structure')
   const filterStateRef = useRef({ whereClause: savedState?.whereClause ?? '', orderBy: savedState?.orderBy ?? '', limit: savedState?.limit ?? 200 })
   const [columns, setColumns] = useState<ColumnInfo[]>([])
@@ -942,10 +976,10 @@ export default function TableViewer({ connectionId, database, table, savedState,
   }, [pendingEdits, pkCols, connectionId, database, table])
 
   const tabMeta: Record<TabKey, string> = {
-    structure: `${columns.length} колонок`,
+    structure: `${columns.length} ${t('erd.columns')}`,
     data: `SELECT * FROM ${database}.${table}`,
-    indexes: `${indexes.length} индексов`,
-    fk: `${fks.length} внешних ключей`,
+    indexes: `${indexes.length} ${t('tableViewer.indexes').toLowerCase()}`,
+    fk: `${fks.length} ${t('tableViewer.foreignKeys').toLowerCase()}`,
     ddl: `SHOW CREATE TABLE ${table}`,
   }
 
@@ -953,7 +987,7 @@ export default function TableViewer({ connectionId, database, table, savedState,
     return (
       <div className="flex-1 flex items-center justify-center text-vs-textMuted gap-2">
         <Loader2 size={16} className="animate-spin" />
-        <span className="text-[12px]">Загрузка {database}.{table}…</span>
+        <span className="text-[12px]">{t('tableViewer.loadingTable', { db: database, table })}</span>
       </div>
     )
   }
@@ -970,24 +1004,24 @@ export default function TableViewer({ connectionId, database, table, savedState,
     <div className="flex flex-col flex-1 min-h-0 relative">
       {/* sub-tabs row with InlinePendingBar on the right */}
       <div className="h-[32px] bg-vs-panel border-b border-vs-border flex items-center px-2.5 gap-3.5 shrink-0">
-        {TABS.map((t) => {
-          const active = tab === t.k
+        {TABS.map((tabItem) => {
+          const active = tab === tabItem.k
           return (
             <button
-              key={t.k}
+              key={tabItem.k}
               onClick={() => {
-                setTab(t.k)
-                onSavedStateChange?.({ activeSubTab: t.k, ...filterStateRef.current })
+                setTab(tabItem.k)
+                onSavedStateChange?.({ activeSubTab: tabItem.k, ...filterStateRef.current })
               }}
               className={`text-[11px] py-2 border-b-2 transition-colors whitespace-nowrap ${
                 active ? 'text-vs-text border-vs-accent' : 'text-vs-textDim border-transparent hover:text-vs-text'
               }`}
             >
-              {t.label}
-              {t.k === 'fk' && fks.length > 0 && (
+              {t(tabItem.labelKey as any)}
+              {tabItem.k === 'fk' && fks.length > 0 && (
                 <span className="ml-1 px-1 py-0.5 rounded bg-[#c586c022] text-[#c586c0] text-[9px]">{fks.length}</span>
               )}
-              {t.k === 'data' && editCellCount > 0 && (
+              {tabItem.k === 'data' && editCellCount > 0 && (
                 <span className="ml-1 w-[6px] h-[6px] rounded-full bg-[#c586c0] inline-block align-middle" />
               )}
             </button>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { WifiOff, Database } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useConnections } from '@renderer/context/ConnectionsContext'
 import { useTags } from '@renderer/context/TagsContext'
 
@@ -17,6 +18,7 @@ function useUpdater() {
 }
 
 export default function StatusBar({ lastQueryMs }: Props) {
+  const { t } = useTranslation()
   const updateEvent = useUpdater()
   const { connections, activeConnectionId, activeDatabase, lostConnectionIds, reconnect } = useConnections()
   const { getTag } = useTags()
@@ -40,14 +42,14 @@ export default function StatusBar({ lastQueryMs }: Props) {
         {active && isLost ? (
           <>
             <WifiOff size={12} className="text-[#f48771]" />
-            <span className="text-[#f48771] font-medium">Соединение потеряно</span>
+            <span className="text-[#f48771] font-medium">{t('statusBar.connectionLost')}</span>
             <span className="opacity-60">— {active.name}</span>
             <button
               onClick={() => reconnect(active.id)}
               className="ml-1 px-2 py-0.5 rounded text-[10px] font-semibold"
               style={{ background: 'rgba(244,135,113,0.2)', color: '#f48771', border: '1px solid rgba(244,135,113,0.35)' }}
             >
-              Переподключить
+              {t('statusBar.reconnect')}
             </button>
           </>
         ) : active ? (
@@ -72,43 +74,43 @@ export default function StatusBar({ lastQueryMs }: Props) {
               </span>
             )}
             {active.ssh && (
-              <span className="opacity-80">via SSH {active.ssh.host}</span>
+              <span className="opacity-80">{t('connections.viaSSH')} {active.ssh.host}</span>
             )}
             {lastQueryMs != null && (
-              <span className="opacity-75">Запрос: {lastQueryMs} мс</span>
+              <span className="opacity-75">{t('statusBar.query')}: {lastQueryMs} {t('results.ms')}</span>
             )}
           </>
         ) : (
           <span className="flex items-center gap-1 opacity-80">
             <WifiOff size={12} />
-            Нет активного подключения
+            {t('statusBar.noConnection')}
           </span>
         )}
       </div>
       <div className="flex items-center gap-2">
         {updateEvent?.type === 'available' && (
           <button
-            onClick={() => window.api.updater.download()}
+            onClick={() => window.api.updater?.download()}
             className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold animate-pulse"
             style={{ background: 'rgba(78,201,176,0.2)', color: '#4ec9b0', border: '1px solid rgba(78,201,176,0.4)' }}
-            title={`Доступна версия ${updateEvent.version}`}
+            title={`v${updateEvent.version}`}
           >
-            ↑ v{updateEvent.version} — Скачать
+            {t('statusBar.updateDownload', { version: updateEvent.version })}
           </button>
         )}
         {updateEvent?.type === 'downloading' && (
           <span className="text-[10px] opacity-70" style={{ color: '#4ec9b0' }}>
-            Загрузка {updateEvent.percent}%…
+            {t('statusBar.updateDownloading', { percent: updateEvent.percent })}
           </span>
         )}
         {updateEvent?.type === 'ready' && (
           <button
-            onClick={() => window.api.updater.install()}
+            onClick={() => window.api.updater?.install()}
             className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold"
             style={{ background: 'rgba(78,201,176,0.3)', color: '#4ec9b0', border: '1px solid rgba(78,201,176,0.6)' }}
-            title={`Версия ${updateEvent.version} готова к установке`}
+            title={`v${updateEvent.version}`}
           >
-            ↑ v{updateEvent.version} — Установить и перезапустить
+            {t('statusBar.updateInstall', { version: updateEvent.version })}
           </button>
         )}
         <span className="opacity-70">DBStudio v0.1.0</span>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { GitBranch, GitCompareArrows, Play } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { ScriptVersion, ScriptStats } from '@shared/types'
 
 interface Props {
@@ -70,6 +71,7 @@ function DiffIndicator({ added, removed, dim }: { added: number; removed: number
 export default function VersionsPanel({
   scriptId, currentVersionId, onLoadVersion, onLoadAndExecute, onDiffVersions
 }: Props) {
+  const { t } = useTranslation()
   const [versions, setVersions] = useState<ScriptVersion[]>([])
   const [stats, setStats] = useState<ScriptStats | null>(null)
   const [selectedForDiff, setSelectedForDiff] = useState<number | null>(null)
@@ -103,7 +105,7 @@ export default function VersionsPanel({
   if (versions.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-vs-textDim text-xs">
-        Нет сохранённых версий
+        {t('scripts.noVersions')}
       </div>
     )
   }
@@ -113,15 +115,15 @@ export default function VersionsPanel({
       {/* Stats */}
       {stats && (
         <div className="flex items-center gap-4 px-3 py-1.5 border-b border-vs-border text-xs text-vs-textDim shrink-0">
-          <span>Запусков: <strong className="text-[#9cdcfe]">{stats.runCount}</strong></span>
+          <span>{t('scripts.runs')}: <strong className="text-[#9cdcfe]">{stats.runCount}</strong></span>
           {stats.lastRunAt && (
-            <span>Последний: <strong className="text-[#9cdcfe]">{fmtDate(stats.lastRunAt)}</strong></span>
+            <span>{t('scripts.lastRun')}: <strong className="text-[#9cdcfe]">{fmtDate(stats.lastRunAt)}</strong></span>
           )}
           {stats.errorCount > 0 && (
-            <span>Ошибок: <strong className="text-[#f48771]">{stats.errorCount}</strong></span>
+            <span>{t('scripts.errorsCount')}: <strong className="text-[#f48771]">{stats.errorCount}</strong></span>
           )}
           {selectedForDiff !== null && (
-            <span className="ml-auto text-[#ce9178]">Выберите вторую версию для сравнения</span>
+            <span className="ml-auto text-[#ce9178]">{t('scripts.selectForDiff')}</span>
           )}
         </div>
       )}
@@ -135,7 +137,7 @@ export default function VersionsPanel({
           return (
             <div
               key={v.id}
-              title="Двойной клик — загрузить версию"
+              title={t('scripts.loadVersionTooltip')}
               onDoubleClick={() => onLoadVersion(v)}
               className={`flex items-center gap-2 px-2 py-1.5 text-xs border-b border-vs-border cursor-pointer
                 ${isCurrent ? 'bg-vs-selected text-white' : 'hover:bg-vs-hover text-vs-text'}
@@ -144,7 +146,7 @@ export default function VersionsPanel({
             >
               {/* ▶ Load + Execute */}
               <button
-                title="Загрузить и выполнить"
+                title={t('scripts.loadAndRun')}
                 onClick={(e) => { e.stopPropagation(); onLoadAndExecute(v) }}
                 className={`shrink-0 flex items-center justify-center w-5 h-5 rounded transition-colors
                   ${isCurrent
@@ -164,7 +166,7 @@ export default function VersionsPanel({
                 <span className={`ml-2 ${isCurrent ? 'text-white/70' : 'text-vs-textDim'}`}>
                   {fmtDate(v.createdAt)}
                 </span>
-                {isCurrent && <span className="ml-2 text-[#4ec9b0] text-[10px]">● активная</span>}
+                {isCurrent && <span className="ml-2 text-[#4ec9b0] text-[10px]">● {t('scripts.activeVersion')}</span>}
               </div>
 
               <DiffIndicator
@@ -175,7 +177,7 @@ export default function VersionsPanel({
 
               {/* Diff button */}
               <button
-                title={selectedForDiff === null ? 'Выбрать для сравнения' : 'Сравнить с выбранной'}
+                title={selectedForDiff === null ? t('scripts.selectForDiff') : t('scripts.compareWith')}
                 onClick={(e) => handleDiffClick(e, v)}
                 className={`shrink-0 p-0.5 transition-colors ${
                   isSelectedDiff

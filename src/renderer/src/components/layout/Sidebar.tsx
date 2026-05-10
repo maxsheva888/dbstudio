@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Plus } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useConnections } from '@renderer/context/ConnectionsContext'
 import { useTags } from '@renderer/context/TagsContext'
 import ConnectionModal from '@renderer/components/connections/ConnectionModal'
@@ -97,8 +98,9 @@ function EnvTag({ tagKeys }: { tagKeys?: string[] }) {
 // ─── SSH badge ────────────────────────────────────────────────────────────────
 
 function SshBadge() {
+  const { t } = useTranslation()
   return (
-    <span title="SSH-туннель" style={{
+    <span title={t('connections.viaSSH')} style={{
       display: 'inline-flex', alignItems: 'center', gap: 3,
       background: '#2a3a2a', color: '#9cd97f',
       padding: '1px 4px', borderRadius: 3,
@@ -179,6 +181,7 @@ function ConnCard({
   draggable: isDraggable, onDragStart, onDragOver, onDrop, onDragEnd,
   isDragging, isDragOver,
 }: ConnCardProps) {
+  const { t } = useTranslation()
   const [hover, setHover] = useState(false)
   const { getTag } = useTags()
   const firstTag = conn.tags?.[0] ? getTag(conn.tags[0]) : undefined
@@ -258,7 +261,7 @@ function ConnCard({
         <EnvTag tagKeys={conn.tags} />
         {conn.ssh && <SshBadge />}
         {lost && (
-          <span title="Соединение потеряно" style={{
+          <span title={t('connections.connectionLost')} style={{
             display: 'inline-flex', alignItems: 'center', gap: 3,
             background: '#3a1a1a', color: '#f48771',
             padding: '1px 5px', borderRadius: 3,
@@ -266,7 +269,7 @@ function ConnCard({
             letterSpacing: 0.4, lineHeight: 1.4, flexShrink: 0,
           }}>
             <span style={{ width: 4, height: 4, borderRadius: 999, background: '#f48771' }} />
-            ПОТЕРЯНО
+            {t('connections.lostBadge')}
           </span>
         )}
       </div>
@@ -282,25 +285,25 @@ function ConnCard({
             </svg>
           </div>
         ) : connected ? (
-          <HoverBtn title="Отключиться" onClick={onDisconnect} alwaysVisible activeColor="#f48771">
+          <HoverBtn title={t('connections.disconnect')} onClick={onDisconnect} alwaysVisible activeColor="#f48771">
             <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
               <rect x="1.5" y="1.5" width="3" height="7" rx="0.5" fill="currentColor"/>
               <rect x="5.5" y="1.5" width="3" height="7" rx="0.5" fill="currentColor"/>
             </svg>
           </HoverBtn>
         ) : (
-          <HoverBtn title="Подключиться" onClick={onConnect} alwaysVisible activeColor="#4ec9b0">
+          <HoverBtn title={t('connections.connect')} onClick={onConnect} alwaysVisible activeColor="#4ec9b0">
             <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
               <path d="M2 1 L9 5 L2 9 Z" fill="currentColor"/>
             </svg>
           </HoverBtn>
         )}
-        <HoverBtn title="Редактировать" onClick={onEdit}>
+        <HoverBtn title={t('common.edit')} onClick={onEdit}>
           <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
             <path d="M7 2 L10 5 L4 11 L1 11 L1 8 Z" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinejoin="round" />
           </svg>
         </HoverBtn>
-        <HoverBtn title="Удалить" onClick={onDelete} danger>
+        <HoverBtn title={t('common.delete')} onClick={onDelete} danger>
           <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
             <path d="M2 3 H10 M5 1.5 H7 M3.5 3 L4 10 H8 L8.5 3" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round" />
           </svg>
@@ -336,6 +339,7 @@ interface Props {
 }
 
 export default function Sidebar({ activePanel, onTableSelect, onOpenScript, onRunScript, onOpenSql, onRunSql }: Props) {
+  const { t } = useTranslation()
   const { saveConnection } = useConnections()
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<ConnectionConfig | undefined>()
@@ -346,7 +350,7 @@ export default function Sidebar({ activePanel, onTableSelect, onOpenScript, onRu
   return (
     <div className="flex flex-col h-full bg-vs-sidebar border-r border-vs-border overflow-hidden">
       <PanelHeader
-        title={panelTitle(activePanel)}
+        title={activePanel === 'connections' ? t('sidebar.connections') : t('sidebar.history')}
         onAdd={activePanel === 'connections' ? openNew : undefined}
       />
       <div className="flex-1 overflow-y-auto min-h-0">
@@ -357,7 +361,7 @@ export default function Sidebar({ activePanel, onTableSelect, onOpenScript, onRu
           <HistoryPanel onOpenScript={onOpenScript} onRunScript={onRunScript} onOpenSql={onOpenSql} onRunSql={onRunSql} />
         )}
         {activePanel === 'history' && (!onOpenScript || !onRunScript || !onOpenSql || !onRunSql) && (
-          <EmptyState text="История пуста" sub="Запросы появятся после выполнения" />
+          <EmptyState text={t('history.empty')} sub={t('history.emptySub')} />
         )}
       </div>
 
@@ -381,6 +385,7 @@ function ConnectionsPanel({
   onEdit: (c: ConnectionConfig) => void
   onTableSelect?: (connectionId: string, database: string, table: string) => void
 }) {
+  const { t } = useTranslation()
   const { connections, activeConnectionId, openConnectionIds, lostConnectionIds, deleteConnection, connect, disconnect, reconnect } = useConnections()
   const [connecting, setConnecting] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'local' | 'dev' | 'prod'>('all')
@@ -449,7 +454,7 @@ function ConnectionsPanel({
   function resetDnd() { setDraggingId(null); setDragOverId(null) }
 
   if (connections.length === 0) {
-    return <EmptyState text="Нет подключений" sub="Нажмите + чтобы добавить" />
+    return <EmptyState text={t('connections.noConnections')} sub={t('connections.noConnectionsSub')} />
   }
 
   const ordered = order.map((id) => connections.find((c) => c.id === id)).filter(Boolean) as ConnectionConfig[]
@@ -487,7 +492,7 @@ function ConnectionsPanel({
                 transition: 'background .1s, color .1s',
               }}
             >
-              {f === 'all' ? 'Все' : f}
+              {f === 'all' ? t('connections.filterAll') : f}
               <span style={{ fontSize: 9, opacity: 0.65 }}>{counts[f]}</span>
             </button>
           )
@@ -520,7 +525,7 @@ function ConnectionsPanel({
                   boxShadow: '0 0 0 2px #4ec9b030', flexShrink: 0,
                 }} />
               )}
-              текущее подключение
+              {t('connections.currentConnection')}
             </div>
             <ConnCard
               conn={activeConn}
@@ -547,7 +552,7 @@ function ConnectionsPanel({
               letterSpacing: 0.7, fontWeight: 700, textTransform: 'uppercase',
               display: 'flex', alignItems: 'center', gap: 5,
             }}>
-              все подключения
+              {t('connections.allConnections')}
               <span style={{ opacity: 0.55, marginLeft: 2 }}>{otherConns.length}</span>
             </div>
 
@@ -574,7 +579,7 @@ function ConnectionsPanel({
 
         {/* No results for current filter */}
         {!activeConn && otherConns.length === 0 && filter !== 'all' && (
-          <EmptyState text={`Нет подключений «${filter}»`} sub="Смените фильтр или добавьте подключение" />
+          <EmptyState text={t('connections.noFilterConnections', { filter })} sub={t('connections.noFilterConnectionsSub')} />
         )}
       </div>
     </div>
@@ -584,11 +589,12 @@ function ConnectionsPanel({
 // ─── Panel header ─────────────────────────────────────────────────────────────
 
 function PanelHeader({ title, onAdd }: { title: string; onAdd?: () => void }) {
+  const { t } = useTranslation()
   return (
     <div className="flex items-center justify-between px-4 py-2 h-9 shrink-0">
       <span className="text-xs font-semibold uppercase tracking-widest text-vs-textDim">{title}</span>
       {onAdd && (
-        <button onClick={onAdd} title="Добавить" className="text-vs-textDim hover:text-vs-text transition-colors">
+        <button onClick={onAdd} title={t('connections.add')} className="text-vs-textDim hover:text-vs-text transition-colors">
           <Plus size={16} />
         </button>
       )}
@@ -607,11 +613,3 @@ function EmptyState({ text, sub }: { text: string; sub: string }) {
   )
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function panelTitle(panel: ActivityPanel): string {
-  switch (panel) {
-    case 'connections': return 'Подключения'
-    case 'history':     return 'История'
-  }
-}
