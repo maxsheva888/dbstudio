@@ -389,6 +389,16 @@ const ru: TranslationKeys = {
     safeTooltip: 'SAFE — чтение и запись разрешены\nЗаблокировано: DROP, TRUNCATE, ALTER TABLE, DELETE без WHERE\n\nНажмите для смены режима',
     fullTooltip: 'FULL — все запросы разрешены\nАгент имеет полный доступ к базе\n\nНажмите для смены режима',
   },
+
+  update: {
+    title: 'Доступно обновление',
+    message: 'DBStudio v{{version}} готова к загрузке.',
+    download: 'Скачать и установить',
+    later: 'Позже',
+    downloading: 'Загрузка… {{percent}}%',
+    ready: 'v{{version}} загружена. Перезапустите для применения.',
+    install: 'Перезапустить сейчас',
+  },
 }
 
 export default ru

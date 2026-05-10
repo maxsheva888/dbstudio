@@ -11,6 +11,7 @@ import ScriptsBar from './components/layout/ScriptsBar'
 import EditorArea from './components/layout/EditorArea'
 import StatusBar from './components/layout/StatusBar'
 import CommandPalette from './components/layout/CommandPalette'
+import UpdateModal from './components/layout/UpdateModal'
 import type { ActivityPanel } from './components/layout/ActivityBar'
 import type { ScriptFile } from '@shared/types'
 
@@ -101,6 +102,8 @@ export default function App() {
             </div>
             <StatusBar lastQueryMs={lastQueryMs} />
           </div>
+
+          <UpdateModal />
 
           {paletteOpen && (
             <CommandPalette

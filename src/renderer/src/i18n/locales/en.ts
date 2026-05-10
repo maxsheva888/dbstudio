@@ -388,6 +388,16 @@ const en = {
     safeTooltip: 'SAFE — reads and writes allowed\nBlocked: DROP, TRUNCATE, ALTER TABLE, DELETE without WHERE\n\nClick to change mode',
     fullTooltip: 'FULL — all queries allowed\nAgent has full database access\n\nClick to change mode',
   },
+
+  update: {
+    title: 'Update available',
+    message: 'DBStudio v{{version}} is ready to download.',
+    download: 'Download & Install',
+    later: 'Later',
+    downloading: 'Downloading… {{percent}}%',
+    ready: 'v{{version}} downloaded. Restart to apply the update.',
+    install: 'Restart now',
+  },
 } as const
 
 export default en

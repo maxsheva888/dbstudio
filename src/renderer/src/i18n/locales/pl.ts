@@ -389,6 +389,16 @@ const pl: TranslationKeys = {
     safeTooltip: 'SAFE — odczyt i zapis dozwolone\nZablokowane: DROP, TRUNCATE, ALTER TABLE, DELETE bez WHERE\n\nKliknij aby zmienić tryb',
     fullTooltip: 'FULL — wszystkie zapytania dozwolone\nAgent ma pełny dostęp do bazy\n\nKliknij aby zmienić tryb',
   },
+
+  update: {
+    title: 'Dostępna aktualizacja',
+    message: 'DBStudio v{{version}} jest gotowa do pobrania.',
+    download: 'Pobierz i zainstaluj',
+    later: 'Później',
+    downloading: 'Pobieranie… {{percent}}%',
+    ready: 'v{{version}} pobrana. Uruchom ponownie aby zastosować.',
+    install: 'Uruchom ponownie',
+  },
 }
 
 export default pl
