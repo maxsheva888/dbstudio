@@ -20,6 +20,8 @@ function useUpdater() {
 export default function StatusBar({ lastQueryMs }: Props) {
   const { t } = useTranslation()
   const updateEvent = useUpdater()
+  const [appVersion, setAppVersion] = useState<string>('')
+  useEffect(() => { window.api.app.getVersion().then(setAppVersion) }, [])
   const { connections, activeConnectionId, activeDatabase, lostConnectionIds, reconnect } = useConnections()
   const { getTag } = useTags()
   const active = connections.find((c) => c.id === activeConnectionId)
@@ -113,7 +115,7 @@ export default function StatusBar({ lastQueryMs }: Props) {
             {t('statusBar.updateInstall', { version: updateEvent.version })}
           </button>
         )}
-        <span className="opacity-70">DBStudio v0.1.0</span>
+        {appVersion && <span className="opacity-70">DBStudio v{appVersion}</span>}
       </div>
     </div>
   )
