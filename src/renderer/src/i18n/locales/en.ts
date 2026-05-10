@@ -151,6 +151,43 @@ const en = {
     mcpManual: 'Or manually in',
     mcpAfterRestart: 'After adding, restart Claude Code. Enable MCP on the desired database in the left tree before use.',
     done: 'Done',
+    // Navigation groups
+    navWorkspace: 'Workspace',
+    navIntegrations: 'Integrations',
+    navApplication: 'Application',
+    // Navigation items
+    navGeneral: 'General',
+    navAppearance: 'Appearance',
+    navEditor: 'Editor',
+    navShortcuts: 'Shortcuts',
+    navAi: 'AI Assistant',
+    navUpdates: 'Updates',
+    navPrivacy: 'Privacy',
+    navAbout: 'About',
+    // Section descriptions
+    descGeneral: 'Interface language and app behavior.',
+    descAppearance: 'Color theme and interface look.',
+    descEditor: 'Font size and SQL editor behavior.',
+    descShortcuts: 'Keyboard shortcuts for all actions.',
+    descMcp: 'Local server for AI agent integration (Claude Code, Cursor).',
+    descAi: 'AI assistant inside the editor.',
+    descUpdates: 'Update channel and installation settings.',
+    descPrivacy: 'Telemetry and data storage.',
+    descAbout: 'Version and license information.',
+    // General section
+    langLabel: 'Interface language',
+    langHint: 'Applies to the entire app, including error messages.',
+    // Footer & search
+    savedAuto: 'Changes saved automatically',
+    searchSettings: 'Search settings…',
+    nothingFound: 'Nothing found',
+    comingSoon: 'Coming soon',
+    comingSoonMessage: 'These settings will appear in a future update.',
+    searchResultOne: 'result',
+    searchResultMany: 'results',
+    // About section
+    aboutDocs: 'Documentation',
+    aboutReportBug: 'Report a bug',
   },
 
   statusBar: {
