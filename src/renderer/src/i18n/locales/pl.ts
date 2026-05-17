@@ -268,6 +268,17 @@ const pl: TranslationKeys = {
     whereExamples: "id = 1  lub  name LIKE '%foo%'",
     indexCount_one: '{{count}} indeks',
     indexCount_other: '{{count}} indeksów',
+    copyAsJson: 'Kopiuj jako JSON',
+    copyAsSqlInsert: 'Kopiuj jako SQL INSERT',
+    copyAsTsv: 'Kopiuj jako TSV (Excel)',
+    copyAsMd: 'Kopiuj jako tabelę Markdown',
+    copyColValues: 'Kopiuj wartości "{{col}}"',
+    copyForIn: 'Kopiuj dla IN (...)',
+    filterByValue: 'Filtruj po tej wartości',
+    openAsInsert: 'Otwórz jako INSERT → nowa karta',
+    openAsDelete: 'Otwórz jako DELETE → nowa karta',
+    rowsSelected_one: '{{count}} wiersz zaznaczony',
+    rowsSelected_other: '{{count}} wierszy zaznaczonych',
   },
 
   queryLog: {
@@ -419,6 +430,8 @@ const pl: TranslationKeys = {
     readOnlyTooltip: 'READ — tylko SELECT/SHOW/DESCRIBE\nAgent nie może modyfikować danych\n\nKliknij aby zmienić tryb',
     safeTooltip: 'SAFE — odczyt i zapis dozwolone\nZablokowane: DROP, TRUNCATE, ALTER TABLE, DELETE bez WHERE\n\nKliknij aby zmienić tryb',
     fullTooltip: 'FULL — wszystkie zapytania dozwolone\nAgent ma pełny dostęp do bazy\n\nKliknij aby zmienić tryb',
+    serverNotRunning: 'Serwer MCP nie działa. Baza została dodana do kolejki — uruchom serwer w Ustawieniach, aby udostępnić ją agentom.',
+    openSettings: 'Otwórz ustawienia',
   },
 
   update: {

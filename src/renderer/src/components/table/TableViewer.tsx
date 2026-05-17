@@ -362,13 +362,14 @@ interface DataTabProps {
   onResultChange: (result: QueryResult | undefined) => void
   onFilterStateChange?: (state: { whereClause: string; orderBy: string; limit: number }) => void
   onSave: () => void
+  onOpenSql?: (sql: string) => void
 }
 
 function DataTab({
   connectionId, database, table, pkCols,
   isProtected, pendingEdits, refreshTrigger,
   initialWhereClause = '', initialOrderBy = '', initialLimit = 200,
-  onCellChange, onRevertCell, onResultChange, onFilterStateChange, onSave,
+  onCellChange, onRevertCell, onResultChange, onFilterStateChange, onSave, onOpenSql,
 }: DataTabProps) {
   const { t } = useTranslation()
   const [result, setResult] = useState<QueryResult | undefined>()
@@ -417,6 +418,28 @@ function DataTab({
       setTotalCount(null)
     }
   }, [connectionId, database, table, whereClause])
+
+  const runQueryWithWhere = useCallback(async (newWhere: string) => {
+    setWhereClause(newWhere)
+    setPage(0)
+    setLoading(true)
+    setError(undefined)
+    try {
+      const quotedTbl = `\`${table.replace(/`/g, '')}\``
+      let sql = `SELECT * FROM ${quotedTbl}`
+      if (newWhere.trim()) sql += ` WHERE ${newWhere}`
+      if (orderBy.trim()) sql += ` ORDER BY ${orderBy}`
+      sql += ` LIMIT ${limit} OFFSET 0`
+      const r = await window.api.query.execute(connectionId, database, sql, t('tableViewer.dataQueryLabel', { table }), undefined, true)
+      setResult(r)
+      onResultChange(r)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      onResultChange(undefined)
+    } finally {
+      setLoading(false)
+    }
+  }, [connectionId, database, table, orderBy, limit, onResultChange])
 
   useEffect(() => { runQueryRef.current = runQuery }, [runQuery])
   useEffect(() => { runCountRef.current = runCount }, [runCount])
@@ -565,6 +588,20 @@ function DataTab({
           pendingEdits={gridPendingEdits}
           onCellChange={onCellChange}
           onRevertCell={onRevertCell}
+          selectable={true}
+          tableName={table}
+          onFilterByValue={(col, value) => {
+            const sqlVal = value == null ? null
+              : typeof value === 'string' ? `'${value.replace(/'/g, "''")}'`
+              : value instanceof Date ? `'${(value as Date).toISOString().slice(0, 19).replace('T', ' ')}'`
+              : typeof value === 'boolean' ? (value ? '1' : '0')
+              : String(value)
+            const expr = sqlVal == null
+              ? `\`${col}\` IS NULL`
+              : `\`${col}\` = ${sqlVal}`
+            runQueryWithWhere(expr)
+          }}
+          onOpenSql={onOpenSql}
         />
       </div>
     </div>
@@ -1071,6 +1108,7 @@ export default function TableViewer({ connectionId, database, table, savedState,
               onSavedStateChange?.({ activeSubTab: tab, ...s })
             }}
             onSave={handleSave}
+            onOpenSql={onOpenSql}
           />
         </div>
         {tab === 'indexes' && <IndexesTab indexes={indexes} />}

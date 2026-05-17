@@ -7,6 +7,7 @@ import { LANGUAGES } from '@renderer/i18n'
 
 interface Props {
   onClose: () => void
+  initialSection?: string
 }
 
 // ── Icons ─────────────────────────────────────────────────────────────
@@ -217,7 +218,7 @@ function SecEditor() {
 function SecMCP() {
   const { t } = useTranslation()
   const { mcpPort, setMcpPort } = useSettings()
-  const { serverRunning, serverPort, activeSession, restartServer } = useMcp()
+  const { serverRunning, serverPort, activeSessions, restartServer } = useMcp()
   const [portInput, setPortInput] = useState(String(mcpPort))
   const [portError, setPortError] = useState<string | null>(null)
   const [restarting, setRestarting] = useState(false)
@@ -260,9 +261,9 @@ function SecMCP() {
             http://localhost:{mcpPort}/mcp
           </div>
         </div>
-        {activeSession && (
-          <span className="text-2xs font-mono text-[#c586c0] shrink-0 truncate max-w-[120px]">
-            🔌 {activeSession.database}
+        {activeSessions.length > 0 && (
+          <span className="text-2xs font-mono text-[#c586c0] shrink-0 truncate max-w-[140px]">
+            🔌 {activeSessions.flatMap((s) => s.databases.map((d) => d.database)).join(', ')}
           </span>
         )}
         {!serverRunning && (
@@ -514,9 +515,9 @@ type NavItem = { id: string; label: string; icon: string; badge?: string }
 type NavGroup = { group: string; items: NavItem[] }
 
 // ── Main modal ────────────────────────────────────────────────────────
-export default function SettingsModal({ onClose }: Props) {
+export default function SettingsModal({ onClose, initialSection }: Props) {
   const { t } = useTranslation()
-  const [activeSection, setActiveSection] = useState('general')
+  const [activeSection, setActiveSection] = useState(initialSection ?? 'general')
   const [search, setSearch] = useState('')
 
   const NAV: NavGroup[] = [

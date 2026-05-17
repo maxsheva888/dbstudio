@@ -6,6 +6,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { useConnections } from '@renderer/context/ConnectionsContext'
 import { useMcp } from '@renderer/context/McpContext'
+import { useToast } from '@renderer/context/ToastContext'
 import type { TableInfo, ColumnInfo, McpSafeMode } from '@shared/types'
 
 interface DbState {
@@ -64,7 +65,8 @@ const SAFE_MODE_CYCLE: McpSafeMode[] = ['read_only', 'safe', 'full']
 export default function SchemaTree({ onTableSelect }: Props) {
   const { t } = useTranslation()
   const { activeConnectionId, activeDatabases, activeDatabase, setActiveDatabase } = useConnections()
-  const { isEnabled, enableDb, disableDb, setSafeMode, activeSession } = useMcp()
+  const { isEnabled, getSafeMode, enableDb, disableDb, setSafeMode, serverRunning } = useMcp()
+  const { showToast } = useToast()
   const [dbStates, setDbStates] = useState<Record<string, DbState>>({})
   const [tableStates, setTableStates] = useState<Record<string, TableState>>({})
   const [dbSizes, setDbSizes] = useState<Record<string, number>>({})
@@ -211,7 +213,7 @@ export default function SchemaTree({ onTableSelect }: Props) {
         const isSystem = SYSTEM_DBS.has(db)
         const dbTotalSize = dbSizes[db] ?? 0
         const mcpOn = !isSystem && activeConnectionId ? isEnabled(activeConnectionId, db) : false
-        const curSafeMode = mcpOn && activeSession ? activeSession.safeMode : 'read_only'
+        const curSafeMode = mcpOn && activeConnectionId ? getSafeMode(activeConnectionId, db) : 'read_only'
         return (
           <div key={db}>
             <div style={{ position: 'sticky', top: 0, zIndex: 2, backgroundColor: '#1a1a1c' }}>
@@ -242,7 +244,22 @@ export default function SchemaTree({ onTableSelect }: Props) {
                 >
                   <button
                     title={mcpOn ? t('mcp.disableForDb') : t('mcp.enableForDb')}
-                    onClick={() => mcpOn ? disableDb(activeConnectionId, db) : enableDb(activeConnectionId, db)}
+                    onClick={() => {
+                      if (mcpOn) {
+                        disableDb(activeConnectionId, db)
+                      } else {
+                        enableDb(activeConnectionId, db)
+                        if (!serverRunning) {
+                          showToast(t('mcp.serverNotRunning'), {
+                            type: 'warning',
+                            action: {
+                              label: t('mcp.openSettings'),
+                              onClick: () => window.dispatchEvent(new CustomEvent('dbstudio:open-settings', { detail: { section: 'mcp' } })),
+                            },
+                          })
+                        }
+                      }
+                    }}
                     className={`flex items-center justify-center w-4 h-4 rounded transition-colors ${mcpOn ? 'text-[#4ec9b0] hover:text-[#f48771]' : 'text-vs-textDim hover:text-[#4ec9b0]'}`}
                   >
                     <Plug2 size={10} />
@@ -259,7 +276,7 @@ export default function SchemaTree({ onTableSelect }: Props) {
                       onClick={() => {
                         const cycle: McpSafeMode[] = ['read_only', 'safe', 'full']
                         const idx = cycle.indexOf(curSafeMode)
-                        setSafeMode(cycle[(idx + 1) % cycle.length])
+                        setSafeMode(activeConnectionId, db, cycle[(idx + 1) % cycle.length])
                       }}
                       className="text-[8px] font-mono font-bold px-1 rounded leading-none h-4 flex items-center transition-colors"
                       style={{

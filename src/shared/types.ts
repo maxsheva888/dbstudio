@@ -198,16 +198,20 @@ export interface TableAccessLog {
 
 export type McpSafeMode = 'full' | 'safe' | 'read_only'
 
-export interface McpSessionInfo {
-  connectionId: string
+export interface McpDbInfo {
   database: string
   safeMode: McpSafeMode
+}
+
+export interface McpSessionInfo {
+  connectionId: string
+  databases: McpDbInfo[]
 }
 
 export interface McpServerStatus {
   running: boolean
   port: number | null
-  activeSession: McpSessionInfo | null
+  activeSessions: McpSessionInfo[]
 }
 
 export interface HistoryEntry {

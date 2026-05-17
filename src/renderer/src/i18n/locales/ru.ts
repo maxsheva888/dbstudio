@@ -268,6 +268,17 @@ const ru: TranslationKeys = {
     whereExamples: "id = 1  или  name LIKE '%foo%'",
     indexCount_one: '{{count}} индекс',
     indexCount_other: '{{count}} индексов',
+    copyAsJson: 'Копировать как JSON',
+    copyAsSqlInsert: 'Копировать как SQL INSERT',
+    copyAsTsv: 'Копировать как TSV (Excel)',
+    copyAsMd: 'Копировать как Markdown-таблицу',
+    copyColValues: 'Копировать значения "{{col}}"',
+    copyForIn: 'Копировать для IN (...)',
+    filterByValue: 'Фильтровать по этому значению',
+    openAsInsert: 'Открыть как INSERT → новая вкладка',
+    openAsDelete: 'Открыть как DELETE → новая вкладка',
+    rowsSelected_one: '{{count}} строка выбрана',
+    rowsSelected_other: '{{count}} строк выбрано',
   },
 
   queryLog: {
@@ -419,6 +430,8 @@ const ru: TranslationKeys = {
     readOnlyTooltip: 'READ — только SELECT/SHOW/DESCRIBE\nАгент не может изменять данные\n\nНажмите для смены режима',
     safeTooltip: 'SAFE — чтение и запись разрешены\nЗаблокировано: DROP, TRUNCATE, ALTER TABLE, DELETE без WHERE\n\nНажмите для смены режима',
     fullTooltip: 'FULL — все запросы разрешены\nАгент имеет полный доступ к базе\n\nНажмите для смены режима',
+    serverNotRunning: 'MCP-сервер не запущен. База добавлена в очередь — запустите сервер в Настройках, чтобы агенты могли к ней подключиться.',
+    openSettings: 'Открыть настройки',
   },
 
   update: {

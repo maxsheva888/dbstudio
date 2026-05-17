@@ -5,6 +5,7 @@ import { ScriptsProvider } from './context/ScriptsContext'
 import { SettingsProvider } from './context/SettingsContext'
 import { TagsProvider } from './context/TagsContext'
 import { McpProvider } from './context/McpContext'
+import { ToastProvider } from './context/ToastContext'
 import ActivityBar from './components/layout/ActivityBar'
 import Sidebar from './components/layout/Sidebar'
 import ScriptsBar from './components/layout/ScriptsBar'
@@ -54,6 +55,7 @@ export default function App() {
       <TagsProvider>
       <ConnectionsProvider>
         <McpProvider>
+        <ToastProvider>
         <ScriptsProvider>
           <div className="flex flex-col h-screen overflow-hidden bg-vs-bg text-vs-text">
             <div className="flex flex-1 overflow-hidden min-h-0">
@@ -113,6 +115,7 @@ export default function App() {
             />
           )}
         </ScriptsProvider>
+        </ToastProvider>
         </McpProvider>
       </ConnectionsProvider>
       </TagsProvider>

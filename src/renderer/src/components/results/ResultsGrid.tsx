@@ -19,6 +19,10 @@ interface Props {
   totalRows?: number
   pageSize?: number
   onPageChange?: (page: number) => void
+  selectable?: boolean
+  tableName?: string
+  onOpenSql?: (sql: string) => void
+  onFilterByValue?: (col: string, value: unknown) => void
 }
 
 // ─── type helpers ──────────────────────────────────────────────────────────
@@ -69,6 +73,14 @@ function toDateInputValue(val: unknown): string {
 
 function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function sqlLiteral(v: unknown): string {
+  if (v == null) return 'NULL'
+  if (typeof v === 'boolean') return v ? '1' : '0'
+  if (typeof v === 'number') return String(v)
+  if (v instanceof Date) return `'${v.toISOString().slice(0, 19).replace('T', ' ')}'`
+  return `'${String(v).replace(/'/g, "''")}'`
 }
 
 // ─── JSON raw viewer ───────────────────────────────────────────────────────
@@ -508,12 +520,177 @@ function InlineEditCell({
 
 // ─── Main ──────────────────────────────────────────────────────────────────
 
-export default function ResultsGrid({ result, error, loading, editMode, pkCols = [], pendingEdits, onCellChange, onRevertCell, page = 0, totalRows, pageSize = 10000, onPageChange }: Props) {
+export default function ResultsGrid({ result, error, loading, editMode, pkCols = [], pendingEdits, onCellChange, onRevertCell, page = 0, totalRows, pageSize = 10000, onPageChange, selectable, tableName, onOpenSql, onFilterByValue }: Props) {
   const { t } = useTranslation()
   const [activeCell, setActiveCell] = useState<CellInfo | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [scrollTop, setScrollTop] = useState(0)
   const [viewHeight, setViewHeight] = useState(800)
+
+  // ── Row selection ────────────────────────────────────────────────────
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set())
+  const [anchorRow, setAnchorRow] = useState<number | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; col: string | null; value: unknown } | null>(null)
+
+  // Reset selection when result changes
+  useEffect(() => { setSelectedRows(new Set()); setAnchorRow(null) }, [result])
+
+  // Escape clears selection and closes menu
+  useEffect(() => {
+    if (!selectable) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') { setSelectedRows(new Set()); setAnchorRow(null); setContextMenu(null) }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selectable])
+
+  // Click outside closes context menu
+  useEffect(() => {
+    if (!contextMenu) return
+    function onDown() { setContextMenu(null) }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [contextMenu])
+
+  function handleRowClick(i: number, e: React.MouseEvent) {
+    if (!selectable) return
+    if (e.shiftKey && anchorRow !== null) {
+      const min = Math.min(anchorRow, i)
+      const max = Math.max(anchorRow, i)
+      const range = new Set<number>()
+      for (let j = min; j <= max; j++) range.add(j)
+      setSelectedRows(range)
+    } else if (e.ctrlKey || e.metaKey) {
+      setSelectedRows(prev => {
+        const next = new Set(prev)
+        if (next.has(i)) next.delete(i); else next.add(i)
+        return next
+      })
+      setAnchorRow(i)
+    } else {
+      setSelectedRows(new Set([i]))
+      setAnchorRow(i)
+    }
+  }
+
+  function handleCellContextMenu(i: number, col: string | null, value: unknown, e: React.MouseEvent) {
+    if (!selectable) return
+    e.preventDefault()
+    e.stopPropagation()
+    if (!selectedRows.has(i)) { setSelectedRows(new Set([i])); setAnchorRow(i) }
+    const menuW = 260, menuH = 200
+    setContextMenu({
+      x: Math.min(e.clientX, window.innerWidth  - menuW - 8),
+      y: Math.min(e.clientY, window.innerHeight - menuH - 8),
+      col,
+      value,
+    })
+  }
+
+  function getSelectedData() {
+    if (!result) return []
+    return Array.from(selectedRows).sort((a, b) => a - b).map(i => result.rows[i]).filter(Boolean)
+  }
+
+  function copyAsJson() {
+    const rows = getSelectedData()
+    const val = rows.length === 1 ? rows[0] : rows
+    navigator.clipboard.writeText(JSON.stringify(val, (_, v) => v instanceof Date ? formatDate(v) : v, 2))
+  }
+
+  function copyAsSqlInsert() {
+    if (!result) return
+    const rows = getSelectedData()
+    const tbl = tableName ? `\`${tableName}\`` : '`table`'
+    const cols = result.columns.map(c => `\`${c}\``).join(', ')
+    const values = rows.map(row =>
+      `(${result.columns.map(col => sqlLiteral(row[col])).join(', ')})`
+    ).join(',\n')
+    navigator.clipboard.writeText(`INSERT INTO ${tbl} (${cols})\nVALUES\n${values};`)
+  }
+
+  function copyAsTsv() {
+    if (!result) return
+    const rows = getSelectedData()
+    const header = result.columns.join('\t')
+    const lines = rows.map(row =>
+      result.columns.map(col => {
+        const v = row[col]
+        if (v == null) return ''
+        if (v instanceof Date) return formatDate(v)
+        if (typeof v === 'object') return JSON.stringify(v)
+        return String(v).replace(/\t/g, ' ').replace(/\n/g, ' ')
+      }).join('\t')
+    )
+    navigator.clipboard.writeText([header, ...lines].join('\n'))
+  }
+
+  function copyAsMarkdown() {
+    if (!result) return
+    const rows = getSelectedData()
+    const cols = result.columns
+    const toStr = (v: unknown) => {
+      if (v == null) return 'NULL'
+      if (v instanceof Date) return formatDate(v)
+      if (typeof v === 'object') return JSON.stringify(v)
+      return String(v).replace(/\|/g, '\\|')
+    }
+    const widths = cols.map(c => Math.max(c.length, ...rows.map(r => toStr(r[c]).length)))
+    const pad = (s: string, w: number) => s + ' '.repeat(Math.max(0, w - s.length))
+    const header = '| ' + cols.map((c, i) => pad(c, widths[i])).join(' | ') + ' |'
+    const sep    = '| ' + widths.map(w => '-'.repeat(w)).join(' | ') + ' |'
+    const lines  = rows.map(row =>
+      '| ' + cols.map((c, i) => pad(toStr(row[c]), widths[i])).join(' | ') + ' |'
+    )
+    navigator.clipboard.writeText([header, sep, ...lines].join('\n'))
+  }
+
+  function copyColumnValues(col: string) {
+    if (!result) return
+    const rows = getSelectedData()
+    const lines = rows.map(row => {
+      const v = row[col]
+      if (v == null) return 'NULL'
+      if (v instanceof Date) return formatDate(v)
+      if (typeof v === 'object') return JSON.stringify(v)
+      return String(v)
+    })
+    navigator.clipboard.writeText(lines.join('\n'))
+  }
+
+  function copyColumnForIn(col: string) {
+    if (!result) return
+    const rows = getSelectedData()
+    const literals = rows.map(row => sqlLiteral(row[col]))
+    navigator.clipboard.writeText(literals.join(', '))
+  }
+
+  function generateInsertSql(): string {
+    if (!result) return ''
+    const rows = getSelectedData()
+    const tbl = tableName ? `\`${tableName}\`` : '`table`'
+    const cols = result.columns.map(c => `\`${c}\``).join(', ')
+    const values = rows.map(row =>
+      `  (${result.columns.map(col => sqlLiteral(row[col])).join(', ')})`
+    ).join(',\n')
+    return `INSERT INTO ${tbl} (${cols})\nVALUES\n${values};`
+  }
+
+  function generateDeleteSql(): string {
+    if (!result || !tableName) return ''
+    const rows = getSelectedData()
+    const tbl = `\`${tableName}\``
+    if (pkCols.length === 1) {
+      const pk = pkCols[0]
+      const vals = rows.map(row => sqlLiteral(row[pk])).join(', ')
+      return `DELETE FROM ${tbl}\nWHERE \`${pk}\` IN (${vals});`
+    }
+    const conditions = rows.map(row =>
+      '(' + pkCols.map(pk => `\`${pk}\` = ${sqlLiteral(row[pk])}`).join(' AND ') + ')'
+    ).join('\n   OR ')
+    return `DELETE FROM ${tbl}\nWHERE ${conditions};`
+  }
 
   useEffect(() => {
     const el = scrollRef.current
@@ -650,8 +827,19 @@ export default function ResultsGrid({ result, error, loading, editMode, pkCols =
                   const rowEdits = pendingEdits?.get(i)
                   const rowDirty = rowEdits && Object.keys(rowEdits).length > 0
                   return (
-                    <tr key={i} className={`border-b border-vs-border ${rowDirty ? 'bg-[#c586c008]' : 'hover:bg-vs-hover'}`}>
-                      <td className={`px-2 py-1 text-right text-vs-textDim border-r border-vs-border select-none relative ${rowDirty ? 'bg-[#c586c018]' : ''}`}>
+                    <tr
+                      key={i}
+                      onClick={(e) => handleRowClick(i, e)}
+                      className={`border-b border-vs-border ${
+                        selectedRows.has(i) ? 'bg-[#007acc22] hover:bg-[#007acc33]'
+                        : rowDirty ? 'bg-[#c586c008]'
+                        : 'hover:bg-vs-hover'
+                      }${selectable ? ' cursor-pointer select-none' : ''}`}
+                    >
+                      <td
+                        onContextMenu={(e) => handleCellContextMenu(i, null, null, e)}
+                        className={`px-2 py-1 text-right text-vs-textDim border-r border-vs-border select-none relative ${rowDirty ? 'bg-[#c586c018]' : ''}`}
+                      >
                         {rowDirty && <span className="absolute top-0 bottom-0 left-0 w-[2px] bg-[#c586c0]" />}
                         {page * pageSize + i + 1}
                       </td>
@@ -668,6 +856,7 @@ export default function ResultsGrid({ result, error, loading, editMode, pkCols =
                           return (
                             <td
                               key={col}
+                              onContextMenu={(e) => handleCellContextMenu(i, col, val, e)}
                               className={`px-2 py-1 border-r border-vs-border max-w-xs ${pendingVal !== undefined ? 'overflow-visible' : 'overflow-hidden'} ${isPk ? 'cursor-default' : 'cursor-text'} ${pendingVal !== undefined ? 'bg-[#c586c010]' : ''}`}
                             >
                               <InlineEditCell
@@ -686,6 +875,7 @@ export default function ResultsGrid({ result, error, loading, editMode, pkCols =
                           <td
                             key={col}
                             onDoubleClick={() => setActiveCell({ column: col, value: val })}
+                            onContextMenu={(e) => handleCellContextMenu(i, col, val, e)}
                             className="px-2 py-1 text-vs-text border-r border-vs-border max-w-xs truncate cursor-default"
                             title={display ?? 'NULL'}
                           >
@@ -708,6 +898,105 @@ export default function ResultsGrid({ result, error, loading, editMode, pkCols =
 
       {activeCell && (
         <CellModal cell={activeCell} onClose={() => setActiveCell(null)} />
+      )}
+
+      {contextMenu && selectable && (
+        <div
+          className="fixed z-50 bg-vs-sidebar border border-vs-border rounded shadow-2xl py-1 min-w-[260px] text-xs"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onMouseDown={e => e.stopPropagation()}
+        >
+          {/* Header: row count */}
+          <div className="px-3 py-1.5 text-[10px] text-vs-textDim border-b border-vs-border mb-1 font-mono">
+            {t('tableViewer.rowsSelected', { count: selectedRows.size })}
+          </div>
+
+          {/* Cell-specific actions */}
+          {contextMenu.col != null && (
+            <>
+              {onFilterByValue && (
+                <button
+                  onClick={() => { onFilterByValue(contextMenu.col!, contextMenu.value); setContextMenu(null) }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-vs-hover flex items-center gap-2.5"
+                >
+                  <span className="text-vs-textDim font-mono text-[10px] w-8">🔍</span>
+                  <span>{t('tableViewer.filterByValue')}</span>
+                  <span className="ml-auto text-vs-textDim font-mono truncate max-w-[90px]">
+                    {contextMenu.value == null ? 'NULL' : String(contextMenu.value).slice(0, 20)}
+                  </span>
+                </button>
+              )}
+              <button
+                onClick={() => { copyColumnValues(contextMenu.col!); setContextMenu(null) }}
+                className="w-full text-left px-3 py-1.5 hover:bg-vs-hover flex items-center gap-2.5"
+              >
+                <span className="text-vs-textDim font-mono text-[10px] w-8">≡</span>
+                {t('tableViewer.copyColValues', { col: contextMenu.col })}
+              </button>
+              <button
+                onClick={() => { copyColumnForIn(contextMenu.col!); setContextMenu(null) }}
+                className="w-full text-left px-3 py-1.5 hover:bg-vs-hover flex items-center gap-2.5"
+              >
+                <span className="text-vs-textDim font-mono text-[10px] w-8">IN</span>
+                {t('tableViewer.copyForIn')}
+              </button>
+              <div className="my-1 border-t border-vs-border" />
+            </>
+          )}
+
+          {/* Copy format actions */}
+          <button
+            onClick={() => { copyAsJson(); setContextMenu(null) }}
+            className="w-full text-left px-3 py-1.5 hover:bg-vs-hover flex items-center gap-2.5"
+          >
+            <span className="text-vs-textDim font-mono text-[10px] w-8">{'{}'}</span>
+            {t('tableViewer.copyAsJson')}
+          </button>
+          <button
+            onClick={() => { copyAsSqlInsert(); setContextMenu(null) }}
+            className="w-full text-left px-3 py-1.5 hover:bg-vs-hover flex items-center gap-2.5"
+          >
+            <span className="text-vs-textDim font-mono text-[10px] w-8">SQL</span>
+            {t('tableViewer.copyAsSqlInsert')}
+          </button>
+          <button
+            onClick={() => { copyAsTsv(); setContextMenu(null) }}
+            className="w-full text-left px-3 py-1.5 hover:bg-vs-hover flex items-center gap-2.5"
+          >
+            <span className="text-vs-textDim font-mono text-[10px] w-8">TSV</span>
+            {t('tableViewer.copyAsTsv')}
+          </button>
+          <button
+            onClick={() => { copyAsMarkdown(); setContextMenu(null) }}
+            className="w-full text-left px-3 py-1.5 hover:bg-vs-hover flex items-center gap-2.5"
+          >
+            <span className="text-vs-textDim font-mono text-[10px] w-8">MD</span>
+            {t('tableViewer.copyAsMd')}
+          </button>
+
+          {/* Open in editor actions */}
+          {onOpenSql && tableName && (
+            <>
+              <div className="my-1 border-t border-vs-border" />
+              <button
+                onClick={() => { onOpenSql(generateInsertSql()); setContextMenu(null) }}
+                className="w-full text-left px-3 py-1.5 hover:bg-vs-hover flex items-center gap-2.5"
+              >
+                <span className="text-vs-textDim font-mono text-[10px] w-8">⊕</span>
+                {t('tableViewer.openAsInsert')}
+              </button>
+              {pkCols.length > 0 && (
+                <button
+                  onClick={() => { onOpenSql(generateDeleteSql()); setContextMenu(null) }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-vs-hover flex items-center gap-2.5 text-[#f48771]"
+                >
+                  <span className="font-mono text-[10px] w-8">✕</span>
+                  {t('tableViewer.openAsDelete')}
+                </button>
+              )}
+            </>
+          )}
+        </div>
       )}
     </div>
   )

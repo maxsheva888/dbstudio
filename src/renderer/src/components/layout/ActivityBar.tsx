@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Server, History, ScrollText, Settings } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import SettingsModal from './SettingsModal'
@@ -20,6 +20,17 @@ const PANEL_ITEMS: { id: Panel; icon: React.ReactNode; labelKey: string }[] = [
 export default function ActivityBar({ activePanel, onPanelChange, onOpenLog, onOpenDiagram }: Props) {
   const { t } = useTranslation()
   const [showSettings, setShowSettings] = useState(false)
+  const [settingsSection, setSettingsSection] = useState<string | undefined>()
+
+  useEffect(() => {
+    function onOpen(e: Event) {
+      const section = (e as CustomEvent<{ section?: string }>).detail?.section
+      setSettingsSection(section)
+      setShowSettings(true)
+    }
+    window.addEventListener('dbstudio:open-settings', onOpen)
+    return () => window.removeEventListener('dbstudio:open-settings', onOpen)
+  }, [])
 
   return (
     <>
@@ -70,7 +81,7 @@ export default function ActivityBar({ activePanel, onPanelChange, onOpenLog, onO
         </button>
       </div>
 
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} initialSection={settingsSection} />}
     </>
   )
 }

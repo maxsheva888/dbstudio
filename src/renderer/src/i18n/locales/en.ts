@@ -273,6 +273,17 @@ const en = {
     whereExamples: "id = 1  or  name LIKE '%foo%'",
     indexCount_one: '{{count}} index',
     indexCount_other: '{{count}} indexes',
+    copyAsJson: 'Copy as JSON',
+    copyAsSqlInsert: 'Copy as SQL INSERT',
+    copyAsTsv: 'Copy as TSV (Excel)',
+    copyAsMd: 'Copy as Markdown table',
+    copyColValues: 'Copy "{{col}}" values',
+    copyForIn: 'Copy for IN (...)',
+    filterByValue: 'Filter by this value',
+    openAsInsert: 'Open as INSERT → new tab',
+    openAsDelete: 'Open as DELETE → new tab',
+    rowsSelected_one: '{{count}} row selected',
+    rowsSelected_other: '{{count}} rows selected',
   },
 
   queryLog: {
@@ -424,6 +435,8 @@ const en = {
     readOnlyTooltip: 'READ — SELECT/SHOW/DESCRIBE only\nAgent cannot modify data\n\nClick to change mode',
     safeTooltip: 'SAFE — reads and writes allowed\nBlocked: DROP, TRUNCATE, ALTER TABLE, DELETE without WHERE\n\nClick to change mode',
     fullTooltip: 'FULL — all queries allowed\nAgent has full database access\n\nClick to change mode',
+    serverNotRunning: 'MCP server is not running. The database is queued — start the server in Settings to make it available to agents.',
+    openSettings: 'Open Settings',
   },
 
   update: {

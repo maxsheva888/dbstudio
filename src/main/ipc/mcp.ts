@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import {
-  enableMcp, disableMcp, getActiveSession, setActiveSafeMode,
+  enableMcp, disableMcp, getAllSessions, setDbSafeMode,
   clearSessionForConnection, isDbEnabled,
 } from '../mcp/mcpState'
 import type { McpSafeMode } from '../mcp/mcpState'
@@ -8,23 +8,20 @@ import { startMcpServer, stopMcpServer, isMcpRunning, getMcpPort } from '../mcp/
 
 export function registerMcpHandlers(): void {
   ipcMain.handle('mcp:getStatus', () => {
-    const session = getActiveSession()
     return {
       running: isMcpRunning(),
       port: getMcpPort(),
-      activeSession: session
-        ? { connectionId: session.connectionId, database: session.database, safeMode: session.safeMode }
-        : null,
+      activeSessions: getAllSessions(),
     }
   })
 
-  ipcMain.handle('mcp:setEnabled', (_e, connectionId: string, database: string, enabled: boolean) => {
-    if (enabled) enableMcp(connectionId, database)
+  ipcMain.handle('mcp:setEnabled', (_e, connectionId: string, database: string, enabled: boolean, safeMode?: McpSafeMode) => {
+    if (enabled) enableMcp(connectionId, database, safeMode ?? 'read_only')
     else disableMcp(connectionId, database)
   })
 
-  ipcMain.handle('mcp:setSafeMode', (_e, _connectionId: string, _database: string, safeMode: McpSafeMode) => {
-    setActiveSafeMode(safeMode)
+  ipcMain.handle('mcp:setSafeMode', (_e, connectionId: string, database: string, safeMode: McpSafeMode) => {
+    setDbSafeMode(connectionId, database, safeMode)
   })
 
   ipcMain.handle('mcp:isEnabled', (_e, connectionId: string, database: string) => {
